@@ -295,6 +295,7 @@ class Node(QGraphicsItem):
         self.setFlag(QGraphicsItem.ItemIsSelectable)
         self.setFlag(QGraphicsItem.ItemSendsGeometryChanges)
         self.setFlag(QGraphicsItem.ItemSendsScenePositionChanges)
+        self.setAcceptHoverEvents(True)  # Enable hover events
         
         # Node properties
         self.title = title
@@ -316,6 +317,9 @@ class Node(QGraphicsItem):
         self.inner_view = None
         self.proxy = None
         self.inner_rect = QRectF()  # Initialize empty rect
+        
+        # Hover dot
+        self.hover_dot = None
         
         # Connection points
         self.connection_points = []
@@ -612,12 +616,48 @@ class Node(QGraphicsItem):
         return hasattr(self, 'resize_handle') and self.resize_handle.contains(pos)
         
     def hoverMoveEvent(self, event):
-        """Handle hover events for the resize handle"""
+        """Handle hover events for the resize handle and show hover dot on border"""
         if self.isSelected() and self.is_over_resize_handle(event.pos()):
             self.setCursor(Qt.SizeFDiagCursor)
+            self._hide_hover_dot()
         else:
             self.setCursor(Qt.ArrowCursor)
+            # Get cursor position in item coordinates
+            item_pos = event.pos()
+            # Get the border intersection in item coordinates
+            border_point = self.get_border_intersection(item_pos)
+            # Convert to scene coordinates for positioning the dot
+            scene_border_point = self.mapToScene(border_point)
+            self._show_hover_dot(scene_border_point)
         super().hoverMoveEvent(event)
+        
+    def hoverLeaveEvent(self, event):
+        """Hide hover dot when leaving the node"""
+        self._hide_hover_dot()
+        super().hoverLeaveEvent(event)
+        
+    def _show_hover_dot(self, pos):
+        """Show the hover dot at the specified position in scene coordinates"""
+        if not self.hover_dot:
+            # Create a larger dot (16x16) with a white border for better visibility
+            self.hover_dot = QGraphicsEllipseItem(-8, -8, 16, 16)
+            self.hover_dot.setBrush(QBrush(QColor(255, 0, 0, 200)))  # Semi-transparent red
+            self.hover_dot.setPen(QPen(Qt.white, 1.5))  # White border
+            self.hover_dot.setZValue(1000)  # Make sure it's on top
+            self.scene().addItem(self.hover_dot)
+        
+        # Position the dot at the border intersection
+        self.hover_dot.setPos(pos)
+        self.hover_dot.show()
+    
+    def _hide_hover_dot(self):
+        """Hide the hover dot"""
+        if self.hover_dot:
+            self.hover_dot.hide()
+            # Remove from scene when not needed
+            if self.scene() and self.hover_dot in self.scene().items():
+                self.scene().removeItem(self.hover_dot)
+            self.hover_dot = None
         
     def mousePressEvent(self, event):
         """Handle mouse press events for resizing"""
@@ -767,10 +807,15 @@ class Node(QGraphicsItem):
         Returns:
             QPointF: The intersection point on the node's border
         """
-        # Get the node's bounding rect in scene coordinates
-        rect = self.mapRectToScene(self.boundingRect())
+        # Get the node's bounding rect in item coordinates
+        rect = self.boundingRect()
         center = rect.center()
         
+        # Ensure point is in item coordinates
+        if hasattr(point, 'x') and hasattr(point, 'y'):
+            if not isinstance(point, QPointF):
+                point = QPointF(point)
+            
         # If the point is the same as center, return the right edge point
         if point == center:
             return QPointF(rect.right(), center.y())
@@ -780,35 +825,45 @@ class Node(QGraphicsItem):
         dy = point.y() - center.y()
         
         # Calculate intersection with each edge of the rectangle
-        # Start with right edge (x = rect.right())
-        if dx > 0:
+        intersections = []
+        
+        # Right edge (x = rect.right())
+        if abs(dx) > 1e-6:  # Avoid division by zero
             t = (rect.right() - center.x()) / dx
             y = center.y() + t * dy
             if rect.top() <= y <= rect.bottom():
-                return QPointF(rect.right(), y)
-                
+                intersections.append((t, QPointF(rect.right(), y)))
+        
         # Left edge (x = rect.left())
-        if dx < 0:
+        if abs(dx) > 1e-6:  # Avoid division by zero
             t = (rect.left() - center.x()) / dx
             y = center.y() + t * dy
             if rect.top() <= y <= rect.bottom():
-                return QPointF(rect.left(), y)
-                
+                intersections.append((t, QPointF(rect.left(), y)))
+        
         # Bottom edge (y = rect.bottom())
-        if dy > 0:
+        if abs(dy) > 1e-6:  # Avoid division by zero
             t = (rect.bottom() - center.y()) / dy
             x = center.x() + t * dx
             if rect.left() <= x <= rect.right():
-                return QPointF(x, rect.bottom())
-                
+                intersections.append((t, QPointF(x, rect.bottom())))
+        
         # Top edge (y = rect.top())
-        if dy < 0:
+        if abs(dy) > 1e-6:  # Avoid division by zero
             t = (rect.top() - center.y()) / dy
             x = center.x() + t * dx
             if rect.left() <= x <= rect.right():
-                return QPointF(x, rect.top())
-                
-        # Should never reach here if point is outside the node
+                intersections.append((t, QPointF(x, rect.top())))
+        
+        # Find the intersection point with the smallest positive t value
+        # This gives us the first intersection along the ray from center to point
+        valid_intersections = [p for t, p in intersections if t > 0]
+        if valid_intersections:
+            # Return the closest intersection to the center
+            return min(valid_intersections, 
+                      key=lambda p: (p.x() - center.x())**2 + (p.y() - center.y())**2)
+        
+        # Fallback: return the right edge center if no valid intersection found
         return QPointF(rect.right(), center.y())
 
 
