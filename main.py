@@ -638,37 +638,153 @@ class Node(QGraphicsItem):
         
     def _show_hover_dot(self, pos):
         """Show the hover dot at the specified position in scene coordinates"""
-        if not self.hover_dot:
-            # Create a larger dot (16x16) with a white border for better visibility
+        if not self.scene():
+            return
+            
+        # Remove existing hover dot if it exists
+        self._hide_hover_dot()
+        
+        try:
+            # Calculate the border point in item coordinates
+            item_pos = self.mapFromScene(pos)
+            border_point = self.get_border_intersection(item_pos)
+            scene_pos = self.mapToScene(border_point)
+            
+            # Create a new hover dot
             self.hover_dot = QGraphicsEllipseItem(-8, -8, 16, 16)
             self.hover_dot.setBrush(QBrush(QColor(255, 0, 0, 200)))  # Semi-transparent red
             self.hover_dot.setPen(QPen(Qt.white, 1.5))  # White border
             self.hover_dot.setZValue(1000)  # Make sure it's on top
+            self.hover_dot.setPos(scene_pos)
+            
+            # Store the relative position on the border (0-1 range for x and y)
+            rect = self.boundingRect()
+            rel_x = (border_point.x() - rect.left()) / rect.width()
+            rel_y = (border_point.y() - rect.top()) / rect.height()
+            self.hover_dot.setData(0, (rel_x, rel_y))  # Store relative position
+            
+            # Add to scene
             self.scene().addItem(self.hover_dot)
-        
-        # Position the dot at the border intersection
-        self.hover_dot.setPos(pos)
-        self.hover_dot.show()
+            self.hover_dot.show()
+            
+        except Exception as e:
+            print(f"Error showing hover dot: {e}")
+            self._hide_hover_dot()
     
     def _hide_hover_dot(self):
         """Hide the hover dot"""
-        if self.hover_dot:
-            self.hover_dot.hide()
-            # Remove from scene when not needed
-            if self.scene() and self.hover_dot in self.scene().items():
-                self.scene().removeItem(self.hover_dot)
-            self.hover_dot = None
+        if hasattr(self, 'hover_dot') and self.hover_dot is not None:
+            try:
+                if self.scene() and self.hover_dot in self.scene().items():
+                    self.hover_dot.hide()
+                    self.scene().removeItem(self.hover_dot)
+            except Exception as e:
+                print(f"Error hiding hover dot: {e}")
+            finally:
+                self.hover_dot = None
         
     def mousePressEvent(self, event):
-        """Handle mouse press events for resizing"""
-        if event.button() == Qt.LeftButton and self.isSelected():
-            if self.is_over_resize_handle(event.pos()):
-                self.is_resizing = True
-                self.old_rect = self.rect
-                self.old_pos = event.pos()
-                event.accept()
-                return
-        super().mousePressEvent(event)
+        """Handle mouse press events for resizing and dot marking"""
+        try:
+            if event.button() == Qt.LeftButton and self.isSelected():
+                if self.is_over_resize_handle(event.pos()):
+                    self.is_resizing = True
+                    self.old_rect = self.rect
+                    self.old_pos = event.pos()
+                    event.accept()
+                    return
+                
+                # Check if we clicked on the hover dot
+                if hasattr(self, 'hover_dot') and self.hover_dot and self.hover_dot.isVisible():
+                    # Get the hover dot's position and size
+                    dot_rect = self.hover_dot.rect()
+                    dot_center = self.hover_dot.pos()
+                    dot_radius = dot_rect.width() / 2
+                    
+                    # Get mouse position in scene coordinates
+                    mouse_pos = self.mapToScene(event.pos())
+                    
+                    # Calculate distance from mouse to dot center
+                    dx = mouse_pos.x() - dot_center.x()
+                    dy = mouse_pos.y() - dot_center.y()
+                    distance_squared = dx*dx + dy*dy
+                    
+                    # Only proceed if click was within the dot's radius
+                    if distance_squared <= (dot_radius * dot_radius):
+                        try:
+                            # Get the relative position from the hover dot
+                            rel_pos = self.hover_dot.data(0)
+                            if rel_pos:
+                                # Create a new dot that will stay relative to the node
+                                marked_dot = {
+                                    'item': QGraphicsEllipseItem(-8, -8, 16, 16),
+                                    'rel_pos': rel_pos  # Store relative position
+                                }
+                                
+                                # Style the dot
+                                marked_dot['item'].setBrush(QBrush(Qt.green))
+                                marked_dot['item'].setPen(QPen(Qt.white, 1.5))
+                                marked_dot['item'].setZValue(1000)
+                                
+                                # Position the dot on the border
+                                self._update_marked_dot_position(marked_dot)
+                                
+                                # Add to scene
+                                if self.scene():
+                                    self.scene().addItem(marked_dot['item'])
+                                
+                                # Store the marked dot so it persists
+                                if not hasattr(self, 'marked_dots'):
+                                    self.marked_dots = []
+                                self.marked_dots.append(marked_dot)
+                                
+                                # Update dot positions when node moves or resizes
+                                if not hasattr(self, '_dot_update_connected'):
+                                    self.scene().changed.connect(self._update_marked_dots_position)
+                                    self._dot_update_connected = True
+                                
+                                event.accept()
+                                return
+                            
+                        except Exception as e:
+                            print(f"Error creating marked dot: {e}")
+            
+            super().mousePressEvent(event)
+            
+        except Exception as e:
+            print(f"Error in mousePressEvent: {e}")
+            super().mousePressEvent(event)
+            
+    def _update_marked_dots_position(self):
+        """Update positions of all marked dots when the node moves or resizes"""
+        if hasattr(self, 'marked_dots'):
+            for dot in self.marked_dots:
+                self._update_marked_dot_position(dot)
+    
+    def _update_marked_dot_position(self, dot):
+        """Update the position of a single marked dot based on node's current bounds"""
+        try:
+            if dot and 'item' in dot and 'rel_pos' in dot:
+                rel_x, rel_y = dot['rel_pos']
+                rect = self.boundingRect()
+                
+                # Calculate absolute position based on relative position and current bounds
+                x = rect.left() + rel_x * rect.width()
+                y = rect.top() + rel_y * rect.height()
+                
+                # Convert to scene coordinates and update position
+                scene_pos = self.mapToScene(QPointF(x, y))
+                dot['item'].setPos(scene_pos)
+        except Exception as e:
+            print(f"Error updating marked dot position: {e}")
+            
+    def itemChange(self, change, value):
+        """Handle item changes to update marked dots"""
+        if change == QGraphicsItem.ItemPositionHasChanged or \
+           change == QGraphicsItem.ItemTransformHasChanged:
+            if hasattr(self, 'marked_dots'):
+                self._update_marked_dots_position()
+        return super().itemChange(change, value)
         
     def mouseDoubleClickEvent(self, event):
         """Handle double click events to edit node title"""
