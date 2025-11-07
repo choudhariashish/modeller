@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (QApplication, QGraphicsView, QGraphicsScene,
                              QGraphicsEllipseItem, QMenu, QAction, QLineEdit)
 from PyQt5.QtCore import Qt, QRectF, QPointF, QSizeF
 from PyQt5.QtGui import QPainter, QPen, QColor, QWheelEvent, QBrush, QFont, QPainterPath
+from edge import Edge
 
 class NodeEditorGraphicsView(QGraphicsView):
     def __init__(self, scene, parent=None):
@@ -43,6 +44,10 @@ class NodeEditorGraphicsView(QGraphicsView):
         
         # Set scene rect
         self.setSceneRect(-1000, -1000, 2000, 2000)
+        
+        # Edge creation state
+        self.edge_start_node = None
+        self.temp_edge = None
         
     def drawBackground(self, painter, rect):
         """Draw the background grid"""
@@ -124,6 +129,11 @@ class NodeEditorGraphicsView(QGraphicsView):
             # Default wheel behavior for scrolling
             super().wheelEvent(event)
 
+    def keyPressEvent(self, event):
+        """Handle key press events"""
+        # No keyboard deletion - use toolbar button instead
+        super().keyPressEvent(event)
+    
     def contextMenuEvent(self, event):
         """Handle context menu events"""
         item = self.itemAt(event.pos())
@@ -192,14 +202,8 @@ class NodeEditorGraphicsView(QGraphicsView):
     
     def keyPressEvent(self, event):
         """Handle key press events"""
-        # Delete selected items when Delete or Backspace is pressed
-        if event.key() in (Qt.Key_Delete, Qt.Key_Backspace):
-            selected_items = self.scene.selectedItems()
-            for item in selected_items:
-                if isinstance(item, Node):
-                    self.delete_node(item)
-        else:
-            super().keyPressEvent(event)
+        # No keyboard deletion - use toolbar button instead
+        super().keyPressEvent(event)
                 
     def mousePressEvent(self, event):
         """Handle mouse press events"""
@@ -215,6 +219,16 @@ class NodeEditorGraphicsView(QGraphicsView):
            item.is_over_resize_handle(item.mapFromScene(self.mapToScene(event.pos()))):
             # Let the node handle the resize operation
             super().mousePressEvent(event)
+            return
+        
+        # Handle edge creation (only when Ctrl/Cmd is pressed)
+        if event.button() == Qt.LeftButton and isinstance(item, Node) and \
+           (event.modifiers() & Qt.ControlModifier):
+            # Start edge creation
+            self.edge_start_node = item
+            self.temp_edge = Edge(item.scenePos())
+            self.temp_edge.set_start_node(item)
+            self.scene.addItem(self.temp_edge)
             return
             
         # Handle node selection and movement
@@ -252,40 +266,35 @@ class NodeEditorGraphicsView(QGraphicsView):
     
     def mouseMoveEvent(self, event):
         """Handle mouse move events"""
+        if self.temp_edge is not None:
+            # Update the temporary edge position
+            scene_pos = self.mapToScene(event.pos())
+            self.temp_edge.set_end_pos(scene_pos)
+        
         super().mouseMoveEvent(event)
     
     def mouseReleaseEvent(self, event):
         """Handle mouse release events"""
+        if event.button() == Qt.LeftButton and self.temp_edge is not None:
+            # Check if we released on a node
+            item = self.itemAt(event.pos())
+            if isinstance(item, Node) and item != self.edge_start_node:
+                # Connect the edge to the target node
+                self.temp_edge.set_end_node(item)
+                # Create control points for the edge
+                self.temp_edge.create_control_points(self.scene)
+                # Keep the edge in the scene
+                if not hasattr(self.scene, 'edges'):
+                    self.scene.edges = []
+                self.scene.edges.append(self.temp_edge)
+            else:
+                # Remove the temporary edge if not connected to a node
+                self.scene.removeItem(self.temp_edge)
+            
+            self.temp_edge = None
+            self.edge_start_node = None
+        
         super().mouseReleaseEvent(event)
-
-
-class ConnectionPoint(QGraphicsEllipseItem):
-    def __init__(self, node, position, index, parent=None):
-        size = 8
-        super().__init__(-size/2, -size/2, size, size, parent)
-        self.node = node
-        self.position = position  # 'top', 'right', 'bottom', 'left'
-        self.index = index
-        self.setBrush(QBrush(Qt.white))
-        self.setPen(QPen(Qt.black, 1))
-        self.setZValue(100)  # Make sure connection points are above nodes
-        self.setAcceptHoverEvents(True)
-        self.setFlag(QGraphicsItem.ItemIsSelectable, True)
-        self.setFlag(QGraphicsItem.ItemIsMovable, False)
-        self.setFlag(QGraphicsItem.ItemSendsScenePositionChanges, True)
-        self.setVisible(False)  # Hidden by default, shown on hover
-        
-    def itemChange(self, change, value):
-        # No edge-related updates needed anymore
-        return super().itemChange(change, value)
-        
-    def hoverEnterEvent(self, event):
-        self.setBrush(QBrush(Qt.red))
-        super().hoverEnterEvent(event)
-        
-    def hoverLeaveEvent(self, event):
-        self.setBrush(QBrush(Qt.white))
-        super().hoverLeaveEvent(event)
 
 
 class Node(QGraphicsItem):
@@ -318,12 +327,8 @@ class Node(QGraphicsItem):
         self.proxy = None
         self.inner_rect = QRectF()  # Initialize empty rect
         
-        # Hover dot
-        self.hover_dot = None
-        
-        # Connection points
-        self.connection_points = []
-        self.connection_positions = ['top', 'right', 'bottom', 'left']
+        # Connected edges
+        self.connected_edges = []
         
         # Set position if provided
         if pos is not None:
@@ -513,63 +518,21 @@ class Node(QGraphicsItem):
                 self.parent_node.update_size()
     
     def update_handles(self):
-        """Update the position of the resize handle and connection points"""
+        """Update the position of the resize handle"""
         h = self.resize_handle_size
         r = self.rect
         self.resize_handle = QRectF(r.right() - h, r.bottom() - h, h, h)
-        
-        # Update connection points
-        if not self.connection_points:
-            self.create_connection_points()
-        
-        # Update positions of existing connection points
-        for point in self.connection_points:
-            self.position_connection_point(point)
     
-    def create_connection_points(self):
-        """Create connection points for the node"""
-        # Clear existing points
-        for point in self.connection_points:
-            if point.scene():
-                point.scene().removeItem(point)
-        self.connection_points = []
+    def update_descendant_edges(self):
+        """Recursively update edges for this node and all its descendants"""
+        # Update this node's edges
+        for edge in self.connected_edges:
+            edge.update_path()
         
-        # Create new connection points
-        for i, pos in enumerate(self.connection_positions):
-            point = ConnectionPoint(self, pos, i, self)
-            self.connection_points.append(point)
-            if self.scene():
-                self.scene().addItem(point)
-            self.position_connection_point(point)
-    
-    def position_connection_point(self, point):
-        """Position a connection point based on its position type"""
-        rect = self.rect
-        if point.position == 'top':
-            x = rect.left() + (rect.width() / (len(self.connection_positions) + 1)) * (point.index + 1)
-            y = rect.top()
-        elif point.position == 'right':
-            x = rect.right()
-            y = rect.top() + (rect.height() / (len(self.connection_positions) + 1)) * (point.index + 1)
-        elif point.position == 'bottom':
-            x = rect.left() + (rect.width() / (len(self.connection_positions) + 1)) * (point.index + 1)
-            y = rect.bottom()
-        else:  # left
-            x = rect.left()
-            y = rect.top() + (rect.height() / (len(self.connection_positions) + 1)) * (point.index + 1)
-            
-        point.setPos(self.mapToScene(x, y))
-    
-    def itemChange(self, change, value):
-        if change == QGraphicsItem.ItemSceneHasChanged and value:
-            # Add connection points to scene
-            if self.scene():
-                self.create_connection_points()
-        elif change == QGraphicsItem.ItemPositionChange and self.scene():
-            # Update connection points when node moves
-            for point in self.connection_points:
-                self.position_connection_point(point)
-        return super().itemChange(change, value)
+        # Recursively update child nodes' edges
+        if self.is_container and self.child_nodes:
+            for child in self.child_nodes:
+                child.update_descendant_edges()
     
     def hoverEnterEvent(self, event):
         super().hoverEnterEvent(event)
@@ -616,72 +579,16 @@ class Node(QGraphicsItem):
         return hasattr(self, 'resize_handle') and self.resize_handle.contains(pos)
         
     def hoverMoveEvent(self, event):
-        """Handle hover events for the resize handle and show hover dot on border"""
+        """Handle hover events for the resize handle"""
         if self.isSelected() and self.is_over_resize_handle(event.pos()):
             self.setCursor(Qt.SizeFDiagCursor)
-            self._hide_hover_dot()
         else:
             self.setCursor(Qt.ArrowCursor)
-            # Get cursor position in item coordinates
-            item_pos = event.pos()
-            # Get the border intersection in item coordinates
-            border_point = self.get_border_intersection(item_pos)
-            # Convert to scene coordinates for positioning the dot
-            scene_border_point = self.mapToScene(border_point)
-            self._show_hover_dot(scene_border_point)
         super().hoverMoveEvent(event)
         
     def hoverLeaveEvent(self, event):
-        """Hide hover dot when leaving the node"""
-        self._hide_hover_dot()
+        """Handle hover leave event"""
         super().hoverLeaveEvent(event)
-        
-    def _show_hover_dot(self, pos):
-        """Show the hover dot at the specified position in scene coordinates"""
-        if not self.scene():
-            return
-            
-        # Remove existing hover dot if it exists
-        self._hide_hover_dot()
-        
-        try:
-            # Calculate the border point in item coordinates
-            item_pos = self.mapFromScene(pos)
-            border_point = self.get_border_intersection(item_pos)
-            scene_pos = self.mapToScene(border_point)
-            
-            # Create a new hover dot
-            self.hover_dot = QGraphicsEllipseItem(-8, -8, 16, 16)
-            self.hover_dot.setBrush(QBrush(QColor(255, 0, 0, 200)))  # Semi-transparent red
-            self.hover_dot.setPen(QPen(Qt.white, 1.5))  # White border
-            self.hover_dot.setZValue(1000)  # Make sure it's on top
-            self.hover_dot.setPos(scene_pos)
-            
-            # Store the relative position on the border (0-1 range for x and y)
-            rect = self.boundingRect()
-            rel_x = (border_point.x() - rect.left()) / rect.width()
-            rel_y = (border_point.y() - rect.top()) / rect.height()
-            self.hover_dot.setData(0, (rel_x, rel_y))  # Store relative position
-            
-            # Add to scene
-            self.scene().addItem(self.hover_dot)
-            self.hover_dot.show()
-            
-        except Exception as e:
-            print(f"Error showing hover dot: {e}")
-            self._hide_hover_dot()
-    
-    def _hide_hover_dot(self):
-        """Hide the hover dot"""
-        if hasattr(self, 'hover_dot') and self.hover_dot is not None:
-            try:
-                if self.scene() and self.hover_dot in self.scene().items():
-                    self.hover_dot.hide()
-                    self.scene().removeItem(self.hover_dot)
-            except Exception as e:
-                print(f"Error hiding hover dot: {e}")
-            finally:
-                self.hover_dot = None
         
     def mousePressEvent(self, event):
         """Handle mouse press events for resizing and dot marking"""
@@ -778,14 +685,6 @@ class Node(QGraphicsItem):
         except Exception as e:
             print(f"Error updating marked dot position: {e}")
             
-    def itemChange(self, change, value):
-        """Handle item changes to update marked dots"""
-        if change == QGraphicsItem.ItemPositionHasChanged or \
-           change == QGraphicsItem.ItemTransformHasChanged:
-            if hasattr(self, 'marked_dots'):
-                self._update_marked_dots_position()
-        return super().itemChange(change, value)
-        
     def mouseDoubleClickEvent(self, event):
         """Handle double click events to edit node title"""
         # Check if the click was on the title area
@@ -858,6 +757,10 @@ class Node(QGraphicsItem):
         if change == QGraphicsItem.ItemPositionChange and self.scene():
             # Update Z-order when position changes
             self.update_z_order()
+            
+        elif change == QGraphicsItem.ItemPositionHasChanged and self.scene():
+            # Update edges for this node and all descendants recursively
+            self.update_descendant_edges()
             
         elif change == QGraphicsItem.ItemSelectedHasChanged and self.scene():
             # When selection changes, ensure selected items are on top
@@ -993,6 +896,22 @@ class NodeEditorWindow(QMainWindow):
         self.setWindowTitle("Node Editor")
         self.setGeometry(100, 100, 1200, 800)
         
+        # Create toolbar
+        toolbar = self.addToolBar("Main Toolbar")
+        toolbar.setMovable(False)
+        
+        # Add delete button to toolbar
+        delete_action = toolbar.addAction("Delete")
+        delete_action.setToolTip("Delete selected items (Nodes or Edges) - Shortcut: Delete or Backspace")
+        delete_action.setShortcut("Delete")  # Primary shortcut
+        delete_action.triggered.connect(self.delete_selected_items)
+        
+        # Add Backspace as an alternative shortcut
+        from PyQt5.QtWidgets import QShortcut
+        from PyQt5.QtGui import QKeySequence
+        backspace_shortcut = QShortcut(QKeySequence(Qt.Key_Backspace), self)
+        backspace_shortcut.activated.connect(self.delete_selected_items)
+        
         # Create a central widget and layout
         central_widget = QWidget()
         self.setCentralWidget(central_widget)
@@ -1029,6 +948,18 @@ class NodeEditorWindow(QMainWindow):
         
         # Show the window
         self.show()
+    
+    def delete_selected_items(self):
+        """Delete all selected items (nodes and edges)"""
+        from edge import Edge
+        
+        selected_items = self.scene.selectedItems()
+        
+        for item in selected_items:
+            if isinstance(item, Edge):
+                item.delete_edge()
+            elif isinstance(item, Node):
+                self.view.delete_node(item)
     
     def createMenu(self):
         # Create menu bar
