@@ -330,11 +330,14 @@ class Node(QGraphicsItem):
         # Connected edges
         self.connected_edges = []
         
+        # Node type property (None, "type1", or "type2")
+        self.node_type = None
+        
         # Set position if provided
         if pos is not None:
             self.setPos(pos)
             
-        # Node colors
+        # Node colors (default blue)
         self.title_color = QColor("#3498db")  # Light blue color for title bar
         self.bg_color = QColor("#2c3e50")
         self.border_color = QColor("#3498db")  # Same light blue as title
@@ -348,6 +351,32 @@ class Node(QGraphicsItem):
         
         # Set the initial size and update the inner rect
         self.update_size()
+    
+    def set_node_type(self, node_type):
+        """Set the node type and update title color and text accordingly"""
+        self.node_type = node_type
+        
+        if node_type == "StateMachine":
+            # Green title background for StateMachine
+            self.title_color = QColor("#27ae60")  # Green
+            # Update title
+            self.title = "StateMachine"
+            self.title_item.setPlainText("StateMachine")
+        elif node_type == "State":
+            # Orange title background for State
+            self.title_color = QColor("#e67e22")  # Orange
+            # Update title
+            self.title = "State"
+            self.title_item.setPlainText("State")
+        else:
+            # Default blue title background
+            self.title_color = QColor("#3498db")  # Blue
+        
+        # Keep border blue for all types
+        self.border_color = QColor("#3498db")
+        
+        # Force redraw
+        self.update()
     
     def setup_container(self):
         """Set up this node as a container for child nodes"""
@@ -900,6 +929,17 @@ class NodeEditorWindow(QMainWindow):
         toolbar = self.addToolBar("Main Toolbar")
         toolbar.setMovable(False)
         
+        # Add node type buttons
+        statemachine_action = toolbar.addAction("StateMachine")
+        statemachine_action.setToolTip("Apply StateMachine type (Green) to selected node")
+        statemachine_action.triggered.connect(lambda: self.apply_node_type("StateMachine"))
+        
+        state_action = toolbar.addAction("State")
+        state_action.setToolTip("Apply State type (Orange) to selected node")
+        state_action.triggered.connect(lambda: self.apply_node_type("State"))
+        
+        toolbar.addSeparator()
+        
         # Add delete button to toolbar
         delete_action = toolbar.addAction("Delete")
         delete_action.setToolTip("Delete selected items (Nodes or Edges) - Shortcut: Delete or Backspace")
@@ -948,6 +988,25 @@ class NodeEditorWindow(QMainWindow):
         
         # Show the window
         self.show()
+    
+    def apply_node_type(self, node_type):
+        """Apply a node type to all selected nodes"""
+        selected_items = self.scene.selectedItems()
+        
+        # Filter to only Node items
+        nodes = [item for item in selected_items if isinstance(item, Node)]
+        
+        if not nodes:
+            self.statusBar().showMessage("No nodes selected")
+            return
+        
+        # Apply the type to all selected nodes
+        for node in nodes:
+            node.set_node_type(node_type)
+        
+        # Update status bar
+        type_name = "StateMachine (Green)" if node_type == "StateMachine" else "State (Orange)"
+        self.statusBar().showMessage(f"Applied {type_name} to {len(nodes)} node(s)")
     
     def delete_selected_items(self):
         """Delete all selected items (nodes and edges)"""
