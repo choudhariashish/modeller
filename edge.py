@@ -1,6 +1,6 @@
 from PyQt5.QtCore import QLineF, Qt, QPointF, QRectF
 from PyQt5.QtGui import QPen, QPainterPath, QColor, QBrush, QPainterPathStroker
-from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsItem, QGraphicsEllipseItem
+from PyQt5.QtWidgets import QGraphicsPathItem, QGraphicsItem, QGraphicsEllipseItem, QGraphicsTextItem
 
 
 class EdgeControlPoint(QGraphicsEllipseItem):
@@ -93,6 +93,45 @@ class EdgeControlPoint(QGraphicsEllipseItem):
         return super().itemChange(change, value)
 
 
+class EdgeTitleItem(QGraphicsTextItem):
+    """Text item for edge title that supports double-click editing"""
+    def __init__(self, edge):
+        super().__init__("")
+        self.edge = edge
+        self._orig_text = ""
+        self.setTextInteractionFlags(Qt.NoTextInteraction)
+        self.setFlag(QGraphicsItem.ItemIsFocusable, True)
+        self.setDefaultTextColor(QColor(255, 255, 255))
+        self.setZValue(10)
+        # Keep text size constant when zooming
+        self.setFlag(QGraphicsItem.ItemIgnoresTransformations, True)
+
+    def mouseDoubleClickEvent(self, event):
+        self._orig_text = self.toPlainText()
+        self.setTextInteractionFlags(Qt.TextEditorInteraction)
+        self.setFocus(Qt.MouseFocusReason)
+        super().mouseDoubleClickEvent(event)
+
+    def focusOutEvent(self, event):
+        # Commit changes on focus out
+        self.setTextInteractionFlags(Qt.NoTextInteraction)
+        self.edge.set_title(self.toPlainText())
+        super().focusOutEvent(event)
+
+    def keyPressEvent(self, event):
+        key = event.key()
+        if key in (Qt.Key_Return, Qt.Key_Enter):
+            self.clearFocus()
+            event.accept()
+            return
+        if key == Qt.Key_Escape:
+            self.setPlainText(self._orig_text)
+            self.clearFocus()
+            event.accept()
+            return
+        super().keyPressEvent(event)
+
+
 class WaypointControlPoint(QGraphicsEllipseItem):
     """A draggable control point for adjusting edge waypoints"""
     
@@ -171,6 +210,7 @@ class WaypointControlPoint(QGraphicsEllipseItem):
 
 class Edge(QGraphicsPathItem):
     """An edge with orthogonal (90-degree) routing between nodes"""
+    _title_seq = 1  # class-level counter for default titles
     
     def __init__(self, start_pos, parent=None):
         super().__init__(parent)
@@ -192,8 +232,20 @@ class Edge(QGraphicsPathItem):
         
         # Edge styling
         self.edge_color = QColor(100, 150, 200)  # Light blue
-        self.selected_color = QColor(255, 140, 0)  # Orange
-        self.setPen(QPen(self.edge_color, 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        self.selected_color = QColor(255, 140, 0)  # Orange (match node selection)
+        # Pre-create pens for normal and selected states
+        self.normal_pen = QPen(self.edge_color, 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+        self.selected_pen = QPen(self.selected_color, 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
+        # Set initial pen
+        self.setPen(self.normal_pen)
+        # Arrow styling
+        self.arrow_size = 10.0
+        self._arrow_end = None
+        self._arrow_prev = None
+
+        # Title label
+        self.title_item = EdgeTitleItem(self)
+        self.title_item.setParentItem(self)
         self.setZValue(-1)  # Draw below nodes
         self.setFlag(QGraphicsPathItem.ItemIsSelectable)
         self.setFlag(QGraphicsPathItem.ItemIsFocusable)  # Allow keyboard events
@@ -252,6 +304,12 @@ class Edge(QGraphicsPathItem):
         if self.waypoint_control is None:
             self.waypoint_control = WaypointControlPoint(self)
             scene.addItem(self.waypoint_control)
+        
+        # Ensure control points (especially the orange waypoint) are positioned immediately
+        # rather than waiting for the next user interaction to trigger an update.
+        self.update_path()
+        # Set a default title once the edge is fully connected
+        self._ensure_default_title()
     
     def get_connection_point(self, is_start):
         """Get the connection point for start or end of edge"""
@@ -307,6 +365,9 @@ class Edge(QGraphicsPathItem):
         if self._end_node is not None:
             end_pos = self._end_node.scenePos()
         
+        # Reset arrow reference points
+        self._arrow_end = None
+        self._arrow_prev = None
         # Only use orthogonal routing if BOTH nodes are connected
         if self._start_node is not None and self._end_node is not None:
             # ORTHOGONAL ROUTING (both nodes connected)
@@ -329,6 +390,9 @@ class Edge(QGraphicsPathItem):
             path.lineTo(waypoint1)
             path.lineTo(waypoint2)
             path.lineTo(actual_end_pos)
+            # Arrow should follow the last segment (waypoint2 -> end)
+            self._arrow_prev = waypoint2
+            self._arrow_end = actual_end_pos
             
             # Update control point positions if they exist
             if self.start_control:
@@ -357,13 +421,58 @@ class Edge(QGraphicsPathItem):
             # Draw straight line
             path.moveTo(actual_start_pos)
             path.lineTo(end_pos)
+            self._arrow_prev = actual_start_pos
+            self._arrow_end = end_pos
         
         self.setPath(path)
+        # Update title position along the path (midpoint)
+        self.update_title_position()
+        
+        # Derive arrow direction from the final segment of the path to ensure
+        # it always points toward the connecting node's border, regardless of
+        # how waypoints were computed.
+        try:
+            p = self.path()
+            count = p.elementCount()
+            if count >= 2:
+                end_el = p.elementAt(count - 1)
+                prev_el = p.elementAt(count - 2)
+                self._arrow_end = QPointF(end_el.x, end_el.y)
+                self._arrow_prev = QPointF(prev_el.x, prev_el.y)
+        except Exception:
+            # If for any reason we can't read the path elements, keep previous values
+            pass
     
     def itemChange(self, change, value):
         """Handle item changes"""
         # No color change on selection - edge stays light blue
         return super().itemChange(change, value)
+
+    def set_title(self, text: str):
+        """Set the edge title text"""
+        self.title_item.setPlainText(text)
+        self.update_title_position()
+
+    def _ensure_default_title(self):
+        """Assign a default title like 'Edge N' after connection if empty."""
+        if self._start_node is not None and self._end_node is not None:
+            if not self.title_item.toPlainText():
+                self.set_title(f"Edge {Edge._title_seq}")
+                Edge._title_seq += 1
+
+    def update_title_position(self):
+        """Reposition the title at the midpoint of the path with a small offset"""
+        p = self.path()
+        if p.isEmpty():
+            return
+        try:
+            mid = p.pointAtPercent(0.5)
+        except Exception:
+            return
+        # Center the text horizontally and place slightly above the path
+        br = self.title_item.boundingRect()
+        offset_y = 6
+        self.title_item.setPos(mid.x() - br.width() / 2.0, mid.y() - br.height() - offset_y)
     
     def mousePressEvent(self, event):
         """Handle mouse press to set focus"""
@@ -372,12 +481,18 @@ class Edge(QGraphicsPathItem):
     
     def contextMenuEvent(self, event):
         """Handle right-click context menu on edge"""
-        from PyQt5.QtWidgets import QMenu
+        from PyQt5.QtWidgets import QMenu, QInputDialog
         menu = QMenu()
+        edit_title_action = menu.addAction("Edit Title…")
         delete_action = menu.addAction("Delete Edge")
         action = menu.exec_(event.screenPos())
         
-        if action == delete_action:
+        if action == edit_title_action:
+            current = self.title_item.toPlainText()
+            text, ok = QInputDialog.getText(None, "Edit Edge Title", "Title:", text=current)
+            if ok:
+                self.set_title(text)
+        elif action == delete_action:
             self.delete_edge()
         
         event.accept()
@@ -421,5 +536,41 @@ class Edge(QGraphicsPathItem):
     
     def paint(self, painter, option, widget=None):
         """Custom painting"""
-        painter.setPen(self.pen())
+        # Switch edge color when selected
+        if self.isSelected():
+            painter.setPen(self.selected_pen)
+            # Keep title white
+            self.title_item.setDefaultTextColor(QColor(255, 255, 255))
+        else:
+            painter.setPen(self.normal_pen)
+            # Keep title white
+            self.title_item.setDefaultTextColor(QColor(255, 255, 255))
         painter.drawPath(self.path())
+        
+        # Draw arrow head at the end of the edge
+        if self._arrow_end is not None and self._arrow_prev is not None:
+            end = self._arrow_end
+            prev = self._arrow_prev
+            dx = end.x() - prev.x()
+            dy = end.y() - prev.y()
+            length = (dx*dx + dy*dy) ** 0.5
+            if length > 0.0001:
+                # Normalize direction
+                ux = dx / length
+                uy = dy / length
+                # Base of arrow triangle
+                base_x = end.x() - ux * self.arrow_size
+                base_y = end.y() - uy * self.arrow_size
+                # Perpendicular vector
+                px = -uy
+                py = ux
+                width = self.arrow_size * 0.6
+                left_x = base_x + px * width
+                left_y = base_y + py * width
+                right_x = base_x - px * width
+                right_y = base_y - py * width
+                # Use same color as current pen
+                painter.setBrush(painter.pen().color())
+                from PyQt5.QtGui import QPolygonF
+                polygon = QPolygonF([end, QPointF(left_x, left_y), QPointF(right_x, right_y)])
+                painter.drawPolygon(polygon)

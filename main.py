@@ -6,7 +6,7 @@ from PyQt5.QtWidgets import (QApplication, QGraphicsView, QGraphicsScene,
                              QGraphicsEllipseItem, QMenu, QAction, QLineEdit)
 from PyQt5.QtCore import Qt, QRectF, QPointF, QSizeF
 from PyQt5.QtGui import QPainter, QPen, QColor, QWheelEvent, QBrush, QFont, QPainterPath
-from edge import Edge
+from edge import Edge, EdgeControlPoint, WaypointControlPoint
 
 class NodeEditorGraphicsView(QGraphicsView):
     def __init__(self, scene, parent=None):
@@ -54,8 +54,8 @@ class NodeEditorGraphicsView(QGraphicsView):
         # Call the parent method to draw the default background
         super().drawBackground(painter, rect)
         
-        # Set up the pen for minor grid lines
-        minor_pen = QPen(QColor(200, 200, 200, 100))  # Light gray with transparency
+        # Set up the pen for minor grid lines (10% darker)
+        minor_pen = QPen(QColor(120, 120, 120, 100))  # Slightly darker gray with transparency
         minor_pen.setWidth(1)
         painter.setPen(minor_pen)
         
@@ -83,8 +83,8 @@ class NodeEditorGraphicsView(QGraphicsView):
                            QPointF(view_rect.right() + margin, y))
             y += self.grid_size
             
-        # Draw major grid lines
-        major_pen = QPen(QColor(150, 150, 150, 150))  # Slightly darker gray
+        # Draw major grid lines (10% darker)
+        major_pen = QPen(QColor(90, 90, 90, 150))  # Slightly darker gray
         major_pen.setWidth(1)
         painter.setPen(major_pen)
         
@@ -137,6 +137,10 @@ class NodeEditorGraphicsView(QGraphicsView):
     def contextMenuEvent(self, event):
         """Handle context menu events"""
         item = self.itemAt(event.pos())
+        # If an edge or its control points are under the cursor, delegate to the item's context menu
+        if isinstance(item, (Edge, EdgeControlPoint, WaypointControlPoint)):
+            return super().contextMenuEvent(event)
+        
         menu = QMenu(self)
         
         if isinstance(item, Node):
@@ -233,6 +237,35 @@ class NodeEditorGraphicsView(QGraphicsView):
             
         # Handle node selection and movement
         if event.button() == Qt.LeftButton:
+            # If clicking on a control point (orange/blue dot), let it handle dragging/selection
+            if isinstance(item, (EdgeControlPoint, WaypointControlPoint)):
+                super().mousePressEvent(event)
+                return
+
+            # If there's an edge under the cursor (even if covered by a node), prefer selecting it
+            items_at_pos = self.items(event.pos())
+            edge_under_cursor = None
+            for it in items_at_pos:
+                # Skip control points so they remain interactive
+                if isinstance(it, (EdgeControlPoint, WaypointControlPoint)):
+                    # Since control points are topmost and interactive, don't hijack this click
+                    edge_under_cursor = None
+                    break
+                if isinstance(it, Edge):
+                    edge_under_cursor = it
+                    break
+            if edge_under_cursor is not None:
+                # Handle edge selection with shift for multi-select
+                if event.modifiers() & Qt.ShiftModifier:
+                    edge_under_cursor.setSelected(not edge_under_cursor.isSelected())
+                else:
+                    for selected_item in self.scene.selectedItems():
+                        if selected_item != edge_under_cursor:
+                            selected_item.setSelected(False)
+                    edge_under_cursor.setSelected(True)
+                # Do not pass the event further so the node below doesn't grab it
+                return
+            
             if isinstance(item, Node):
                 # If shift is pressed, toggle selection
                 if event.modifiers() & Qt.ShiftModifier:
@@ -341,7 +374,7 @@ class Node(QGraphicsItem):
         self.title_color = QColor("#3498db")  # Light blue color for title bar
         self.bg_color = QColor("#2c3e50")
         self.border_color = QColor("#3498db")  # Same light blue as title
-        self.border_width = 5  # Border width set to 5 pixels
+        self.border_width = 3  # Border width set to 3 pixels
         self.text_color = QColor("#ecf0f1")
         
         # Node title
