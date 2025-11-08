@@ -11,16 +11,31 @@ A PyQt5-based node editor application with orthogonal edge routing and interacti
 - Container nodes that can hold child nodes
 - Nested node support with unlimited depth
 - Drag and drop nodes
+- Resize nodes using bottom-right handle
+- Change node types (StateMachine/State) with toolbar buttons
 - Double-click to edit node titles
 - Delete nodes via toolbar button or Delete/Backspace keys
 
-### Edge Routing
+### Edge Management
 - Orthogonal (90-degree angle) edge routing between nodes
 - Draggable blue endpoint controls to adjust connection points
 - Draggable orange waypoint control to adjust edge bend position
+- Double-click edge title to edit
 - Proportional waypoint movement with endpoint changes
 - Edges automatically update when parent nodes move (recursive for all nested children)
 - Wider hit area for easier edge selection
+- Delete edges via toolbar button or Delete/Backspace keys
+
+### File Management
+- **Save designs** to JSON files (Ctrl+S)
+- **Load designs** from JSON files (Ctrl+O)
+- **New design** to clear current work and start fresh (Ctrl+N)
+- Complete design persistence including:
+  - All nodes (top-level and nested children)
+  - Parent-child relationships
+  - Node positions, sizes, and types
+  - All edges with connection points and waypoints
+  - Edge titles
 
 ### UI Features
 - Zoom in/out with mouse wheel
@@ -61,14 +76,36 @@ python main.py
 ```
 
 ### Controls
+
+#### File Operations
+- **Ctrl+N**: New design (clear current work)
+- **Ctrl+S**: Save design to JSON file
+- **Ctrl+O**: Load design from JSON file
+- **Ctrl+Q**: Exit application
+
+#### View Controls
 - **Mouse Wheel**: Zoom in/out
+- **Ctrl++**: Zoom in
+- **Ctrl+-**: Zoom out
+- **Ctrl+0**: Reset zoom
 - **Right-click + Drag**: Pan around the canvas
+
+#### Node Operations
 - **Left-click + Drag**: Select/Move nodes
-- **Ctrl + Click + Drag**: Create edge between nodes
-- **Click on edge/node + Delete/Backspace**: Delete selected item
-- **Toolbar Delete Button**: Delete selected items
+- **Drag bottom-right handle**: Resize node
 - **Double-click node title**: Edit node title
 - **Right-click**: Context menu for adding nodes
+- **Toolbar buttons**: Change node type (StateMachine/State)
+
+#### Edge Operations
+- **Ctrl + Click + Drag**: Create edge between nodes
+- **Drag blue dots**: Adjust edge connection points on nodes
+- **Drag orange dot**: Adjust edge waypoint (bend position)
+- **Double-click edge title**: Edit edge title
+
+#### Deletion
+- **Delete/Backspace**: Delete selected items
+- **Toolbar Delete Button**: Delete selected items
 
 ## License
 MIT
