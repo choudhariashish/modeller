@@ -1,9 +1,11 @@
 import sys
 import math
+import json
 from PyQt5.QtWidgets import (QApplication, QGraphicsView, QGraphicsScene, 
                              QMainWindow, QVBoxLayout, QWidget, QGraphicsItem,
                              QGraphicsRectItem, QGraphicsTextItem, QGraphicsPathItem,
-                             QGraphicsEllipseItem, QMenu, QAction, QLineEdit, QSizePolicy)
+                             QGraphicsEllipseItem, QMenu, QAction, QLineEdit, QSizePolicy,
+                             QFileDialog, QMessageBox)
 from PyQt5.QtCore import Qt, QRectF, QPointF, QSizeF, QByteArray
 from PyQt5.QtGui import QPainter, QPen, QColor, QWheelEvent, QBrush, QFont, QPainterPath, QIcon, QPixmap
 from PyQt5.QtSvg import QSvgRenderer
@@ -1089,12 +1091,262 @@ class NodeEditorWindow(QMainWindow):
             elif isinstance(item, Node):
                 self.view.delete_node(item)
     
+    def save_design(self):
+        """Save the current design to a JSON file"""
+        file_path, _ = QFileDialog.getSaveFileName(
+            self,
+            "Save Design",
+            "",
+            "JSON Files (*.json);;All Files (*)"
+        )
+        
+        if not file_path:
+            return
+        
+        try:
+            # Collect all nodes recursively (including children)
+            def collect_all_nodes(node_list):
+                all_nodes = []
+                for node in node_list:
+                    all_nodes.append(node)
+                    # Recursively collect child nodes
+                    if hasattr(node, 'child_nodes') and node.child_nodes:
+                        all_nodes.extend(collect_all_nodes(node.child_nodes))
+                return all_nodes
+            
+            all_nodes = collect_all_nodes(self.nodes)
+            
+            # Serialize nodes
+            nodes_data = []
+            for node in all_nodes:
+                # For child nodes, pos() is already in parent's local coordinates
+                # For top-level nodes, pos() is in scene coordinates
+                node_data = {
+                    'title': node.title,
+                    'pos': {'x': node.pos().x(), 'y': node.pos().y()},
+                    'rect': {
+                        'x': node.rect.x(),
+                        'y': node.rect.y(),
+                        'width': node.rect.width(),
+                        'height': node.rect.height()
+                    },
+                    'node_type': getattr(node, 'node_type', None),
+                    'is_container': node.is_container,
+                    'parent_id': id(node.parent_node) if hasattr(node, 'parent_node') and node.parent_node else None,
+                    'id': id(node)  # Use object id as unique identifier
+                }
+                nodes_data.append(node_data)
+            
+            # Serialize edges (check both self.edges and self.scene.edges)
+            edges_data = []
+            edges_list = None
+            if hasattr(self.scene, 'edges') and self.scene.edges:
+                edges_list = self.scene.edges
+            elif hasattr(self, 'edges') and self.edges:
+                edges_list = self.edges
+            
+            if edges_list:
+                for edge in edges_list:
+                    # Save control point offsets for accurate positioning
+                    start_offset = None
+                    end_offset = None
+                    
+                    if hasattr(edge, 'start_offset') and edge.start_offset:
+                        start_offset = {'x': edge.start_offset.x(), 'y': edge.start_offset.y()}
+                    elif hasattr(edge, 'start_control') and edge.start_control and hasattr(edge.start_control, 'offset'):
+                        start_offset = {'x': edge.start_control.offset.x(), 'y': edge.start_control.offset.y()}
+                    
+                    if hasattr(edge, 'end_offset') and edge.end_offset:
+                        end_offset = {'x': edge.end_offset.x(), 'y': edge.end_offset.y()}
+                    elif hasattr(edge, 'end_control') and edge.end_control and hasattr(edge.end_control, 'offset'):
+                        end_offset = {'x': edge.end_control.offset.x(), 'y': edge.end_control.offset.y()}
+                    
+                    edge_data = {
+                        'start_node_id': id(edge._start_node) if edge._start_node else None,
+                        'end_node_id': id(edge._end_node) if edge._end_node else None,
+                        'title': edge.title_item.toPlainText() if hasattr(edge, 'title_item') else "",
+                        'waypoint_ratio': edge.waypoint_ratio if hasattr(edge, 'waypoint_ratio') else 0.5,
+                        'start_offset': start_offset,
+                        'end_offset': end_offset
+                    }
+                    edges_data.append(edge_data)
+            
+            # Create the design data structure
+            design_data = {
+                'nodes': nodes_data,
+                'edges': edges_data
+            }
+            
+            # Write to file
+            with open(file_path, 'w') as f:
+                json.dump(design_data, f, indent=2)
+            
+            self.statusBar().showMessage(f"Design saved to {file_path}")
+            QMessageBox.information(self, "Success", "Design saved successfully!")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to save design: {str(e)}")
+            self.statusBar().showMessage("Failed to save design")
+    
+    def load_design(self):
+        """Load a design from a JSON file"""
+        file_path, _ = QFileDialog.getOpenFileName(
+            self,
+            "Load Design",
+            "",
+            "JSON Files (*.json);;All Files (*)"
+        )
+        
+        if not file_path:
+            return
+        
+        try:
+            # Read from file
+            with open(file_path, 'r') as f:
+                design_data = json.load(f)
+            
+            # Clear existing design
+            self.scene.clear()
+            self.nodes.clear()
+            
+            # Clear edges from both locations
+            if hasattr(self.scene, 'edges'):
+                self.scene.edges.clear()
+            else:
+                self.scene.edges = []
+            
+            if hasattr(self, 'edges'):
+                self.edges.clear()
+            
+            # Create a mapping from old IDs to new node objects
+            id_to_node = {}
+            
+            # First pass: Create all nodes without parent relationships
+            for node_data in design_data.get('nodes', []):
+                pos = QPointF(node_data['pos']['x'], node_data['pos']['y'])
+                node = Node(node_data['title'], pos)
+                
+                # Restore rect
+                rect_data = node_data['rect']
+                node.rect = QRectF(
+                    rect_data['x'],
+                    rect_data['y'],
+                    rect_data['width'],
+                    rect_data['height']
+                )
+                
+                # Update resize handle position after restoring rect
+                if hasattr(node, 'update_handles'):
+                    node.update_handles()
+                
+                # Restore node type
+                if node_data.get('node_type'):
+                    node.set_node_type(node_data['node_type'])
+                
+                # Restore container status
+                node.is_container = node_data.get('is_container', False)
+                
+                # Update inner rect for containers
+                if node_data.get('is_container') and hasattr(node, 'update_inner_rect'):
+                    node.update_inner_rect()
+                
+                # Map old ID to new node
+                id_to_node[node_data['id']] = node
+                
+                # Store parent_id for second pass
+                node._temp_parent_id = node_data.get('parent_id')
+            
+            # Second pass: Establish parent-child relationships
+            for node_data in design_data.get('nodes', []):
+                node = id_to_node[node_data['id']]
+                parent_id = node_data.get('parent_id')
+                
+                if parent_id and parent_id in id_to_node:
+                    # This node has a parent - add as child with saved position
+                    parent_node = id_to_node[parent_id]
+                    # Position is already in parent's local coordinates from save
+                    saved_pos = QPointF(node_data['pos']['x'], node_data['pos']['y'])
+                    parent_node.add_child_node(node, saved_pos)
+                else:
+                    # This is a top-level node - add to scene and nodes list
+                    self.scene.addItem(node)
+                    self.nodes.append(node)
+                
+                # Clean up temporary attribute
+                if hasattr(node, '_temp_parent_id'):
+                    delattr(node, '_temp_parent_id')
+            
+            # Recreate edges
+            for edge_data in design_data.get('edges', []):
+                start_node_id = edge_data.get('start_node_id')
+                end_node_id = edge_data.get('end_node_id')
+                
+                if start_node_id in id_to_node and end_node_id in id_to_node:
+                    start_node = id_to_node[start_node_id]
+                    end_node = id_to_node[end_node_id]
+                    
+                    # Create edge
+                    edge = Edge(start_node.scenePos())
+                    edge.set_start_node(start_node)
+                    edge.set_end_node(end_node)
+                    
+                    # Restore waypoint ratio
+                    if 'waypoint_ratio' in edge_data:
+                        edge.waypoint_ratio = edge_data['waypoint_ratio']
+                    
+                    # Restore control point offsets
+                    if edge_data.get('start_offset'):
+                        offset_data = edge_data['start_offset']
+                        edge.start_offset = QPointF(offset_data['x'], offset_data['y'])
+                    
+                    if edge_data.get('end_offset'):
+                        offset_data = edge_data['end_offset']
+                        edge.end_offset = QPointF(offset_data['x'], offset_data['y'])
+                    
+                    # Add to scene
+                    self.scene.addItem(edge)
+                    
+                    # Add to edges list (prefer scene.edges)
+                    if hasattr(self.scene, 'edges'):
+                        self.scene.edges.append(edge)
+                    elif hasattr(self, 'edges'):
+                        self.edges.append(edge)
+                    
+                    # Create control points
+                    edge.create_control_points(self.scene)
+                    
+                    # Restore title
+                    if edge_data.get('title'):
+                        edge.set_title(edge_data['title'])
+                    
+                    # Update path
+                    edge.update_path()
+            
+            self.statusBar().showMessage(f"Design loaded from {file_path}")
+            QMessageBox.information(self, "Success", "Design loaded successfully!")
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Error", f"Failed to load design: {str(e)}")
+            self.statusBar().showMessage("Failed to load design")
+    
     def createMenu(self):
         # Create menu bar
         menubar = self.menuBar()
         
         # File menu
         file_menu = menubar.addMenu("&File")
+        
+        # Save action
+        save_action = file_menu.addAction("Save")
+        save_action.setShortcut("Ctrl+S")
+        save_action.triggered.connect(self.save_design)
+        
+        # Load action
+        load_action = file_menu.addAction("Load")
+        load_action.setShortcut("Ctrl+O")
+        load_action.triggered.connect(self.load_design)
+        
+        file_menu.addSeparator()
         
         # Exit action
         exit_action = file_menu.addAction("Exit")
