@@ -543,13 +543,18 @@ class Edge(QGraphicsPathItem):
             self.end_control.scene().removeItem(self.end_control)
         if self.waypoint_control and self.waypoint_control.scene():
             self.waypoint_control.scene().removeItem(self.waypoint_control)
+        
         # Remove title item
         if self.title_item and self.title_item.scene():
             self.title_item.scene().removeItem(self.title_item)
         
-        # Remove from scene
-        if self.scene():
-            self.scene().removeItem(self)
+        # Remove from scene's edges list
+        scene = self.scene()
+        if scene:
+            if hasattr(scene, 'edges') and self in scene.edges:
+                scene.edges.remove(self)
+            # Remove from scene
+            scene.removeItem(self)
     
     def shape(self):
         """Return a wider shape for easier selection"""

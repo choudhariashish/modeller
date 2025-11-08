@@ -203,9 +203,17 @@ class NodeEditorGraphicsView(QGraphicsView):
     
     def delete_node(self, node):
         """Delete the specified node"""
+        # Remove from parent if it has one
         if node.parent_node:
             node.parent_node.remove_child_node(node)
+        
+        # Remove from scene
         self.scene.removeItem(node)
+        
+        # Remove from window's nodes list
+        window = self.window()
+        if hasattr(window, 'nodes') and node in window.nodes:
+            window.nodes.remove(node)
     
     def keyPressEvent(self, event):
         """Handle key press events"""
@@ -1091,6 +1099,39 @@ class NodeEditorWindow(QMainWindow):
             elif isinstance(item, Node):
                 self.view.delete_node(item)
     
+    def new_design(self):
+        """Clear the current design and start fresh"""
+        # Ask for confirmation if there are items in the scene
+        if self.nodes or (hasattr(self.scene, 'edges') and self.scene.edges):
+            reply = QMessageBox.question(
+                self,
+                "New Design",
+                "Are you sure you want to clear the current design?\nAny unsaved changes will be lost.",
+                QMessageBox.Yes | QMessageBox.No,
+                QMessageBox.No
+            )
+            
+            if reply == QMessageBox.No:
+                return
+        
+        # Clear the scene
+        self.scene.clear()
+        
+        # Clear nodes list
+        self.nodes.clear()
+        
+        # Clear edges list
+        if hasattr(self.scene, 'edges'):
+            self.scene.edges.clear()
+        else:
+            self.scene.edges = []
+        
+        if hasattr(self, 'edges'):
+            self.edges.clear()
+        
+        # Update status bar
+        self.statusBar().showMessage("New design created")
+    
     def save_design(self):
         """Save the current design to a JSON file"""
         file_path, _ = QFileDialog.getSaveFileName(
@@ -1177,9 +1218,12 @@ class NodeEditorWindow(QMainWindow):
                 'edges': edges_data
             }
             
-            # Write to file
+            # Write to file (mode 'w' truncates existing file first)
+            # Explicitly truncate and write to ensure clean save
             with open(file_path, 'w') as f:
+                f.truncate(0)  # Explicitly clear file content
                 json.dump(design_data, f, indent=2)
+                f.flush()  # Ensure data is written to disk
             
             self.statusBar().showMessage(f"Design saved to {file_path}")
             QMessageBox.information(self, "Success", "Design saved successfully!")
@@ -1335,6 +1379,13 @@ class NodeEditorWindow(QMainWindow):
         
         # File menu
         file_menu = menubar.addMenu("&File")
+        
+        # New action
+        new_action = file_menu.addAction("New")
+        new_action.setShortcut("Ctrl+N")
+        new_action.triggered.connect(self.new_design)
+        
+        file_menu.addSeparator()
         
         # Save action
         save_action = file_menu.addAction("Save")

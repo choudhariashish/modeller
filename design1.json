@@ -1,0 +1,85 @@
+{
+  "nodes": [
+    {
+      "title": "Node 1",
+      "pos": {
+        "x": -478.0,
+        "y": -252.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 977.0,
+        "height": 539.0
+      },
+      "node_type": null,
+      "is_container": true,
+      "parent_id": null,
+      "id": 4657956896
+    },
+    {
+      "title": "Child Node",
+      "pos": {
+        "x": 131.0,
+        "y": 139.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": null,
+      "is_container": false,
+      "parent_id": 4657956896,
+      "id": 4657958480
+    },
+    {
+      "title": "Child Node",
+      "pos": {
+        "x": 556.0,
+        "y": 275.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": null,
+      "is_container": false,
+      "parent_id": 4657956896,
+      "id": 4658058288
+    }
+  ],
+  "edges": [
+    {
+      "start_node_id": 4657958480,
+      "end_node_id": 4658058288,
+      "title": "Edge 1",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 203.5,
+        "y": 77.3876923076923
+      },
+      "end_offset": {
+        "x": 100.71014108009709,
+        "y": -3.5
+      }
+    },
+    {
+      "start_node_id": 4658058288,
+      "end_node_id": 4657958480,
+      "title": "Edge 2",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": -3.5,
+        "y": 13.331428571428567
+      },
+      "end_offset": {
+        "x": 95.7814882850409,
+        "y": 103.5
+      }
+    }
+  ]
+}
