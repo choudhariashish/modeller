@@ -3,10 +3,11 @@ import math
 from PyQt5.QtWidgets import (QApplication, QGraphicsView, QGraphicsScene, 
                              QMainWindow, QVBoxLayout, QWidget, QGraphicsItem,
                              QGraphicsRectItem, QGraphicsTextItem, QGraphicsPathItem,
-                             QGraphicsEllipseItem, QMenu, QAction, QLineEdit)
-from PyQt5.QtCore import Qt, QRectF, QPointF, QSizeF
-from PyQt5.QtGui import QPainter, QPen, QColor, QWheelEvent, QBrush, QFont, QPainterPath
-from edge import Edge, EdgeControlPoint, WaypointControlPoint
+                             QGraphicsEllipseItem, QMenu, QAction, QLineEdit, QSizePolicy)
+from PyQt5.QtCore import Qt, QRectF, QPointF, QSizeF, QByteArray
+from PyQt5.QtGui import QPainter, QPen, QColor, QWheelEvent, QBrush, QFont, QPainterPath, QIcon, QPixmap
+from PyQt5.QtSvg import QSvgRenderer
+from edge import Edge, EdgeControlPoint, WaypointControlPoint, EdgeTitleItem
 
 class NodeEditorGraphicsView(QGraphicsView):
     def __init__(self, scene, parent=None):
@@ -137,8 +138,8 @@ class NodeEditorGraphicsView(QGraphicsView):
     def contextMenuEvent(self, event):
         """Handle context menu events"""
         item = self.itemAt(event.pos())
-        # If an edge or its control points are under the cursor, delegate to the item's context menu
-        if isinstance(item, (Edge, EdgeControlPoint, WaypointControlPoint)):
+        # If an edge, edge title, or its control points are under the cursor, delegate to the item's context menu
+        if isinstance(item, (Edge, EdgeControlPoint, WaypointControlPoint, EdgeTitleItem)):
             return super().contextMenuEvent(event)
         
         menu = QMenu(self)
@@ -241,6 +242,10 @@ class NodeEditorGraphicsView(QGraphicsView):
             if isinstance(item, (EdgeControlPoint, WaypointControlPoint)):
                 super().mousePressEvent(event)
                 return
+            # If clicking on an edge title, let it handle editing/selection
+            if isinstance(item, EdgeTitleItem):
+                super().mousePressEvent(event)
+                return
 
             # If there's an edge under the cursor (even if covered by a node), prefer selecting it
             items_at_pos = self.items(event.pos())
@@ -251,6 +256,10 @@ class NodeEditorGraphicsView(QGraphicsView):
                     # Since control points are topmost and interactive, don't hijack this click
                     edge_under_cursor = None
                     break
+                # If the title is under the cursor, don't hijack; let text item receive the event
+                if isinstance(it, EdgeTitleItem):
+                    super().mousePressEvent(event)
+                    return
                 if isinstance(it, Edge):
                     edge_under_cursor = it
                     break
@@ -329,6 +338,13 @@ class NodeEditorGraphicsView(QGraphicsView):
         
         super().mouseReleaseEvent(event)
 
+    def mouseDoubleClickEvent(self, event):
+        """Ensure edge titles receive double-clicks to enter edit mode"""
+        item = self.itemAt(event.pos())
+        if isinstance(item, EdgeTitleItem):
+            return super().mouseDoubleClickEvent(event)
+        return super().mouseDoubleClickEvent(event)
+
 
 class Node(QGraphicsItem):
     def __init__(self, title="Node", pos=None, parent=None):
@@ -373,7 +389,7 @@ class Node(QGraphicsItem):
         # Node colors (default blue)
         self.title_color = QColor("#3498db")  # Light blue color for title bar
         self.bg_color = QColor("#2c3e50")
-        self.border_color = QColor("#3498db")  # Same light blue as title
+        self.border_color = QColor("#747574")  # Default neutral border color
         self.border_width = 3  # Border width set to 3 pixels
         self.text_color = QColor("#ecf0f1")
         
@@ -396,8 +412,9 @@ class Node(QGraphicsItem):
             self.title = "StateMachine"
             self.title_item.setPlainText("StateMachine")
         elif node_type == "State":
-            # Orange title background for State
-            self.title_color = QColor("#e67e22")  # Orange
+            # State title background is 40% darker than the StateMachine's title color
+            base_sm = QColor("#27ae60")
+            self.title_color = QColor(base_sm).darker(166)
             # Update title
             self.title = "State"
             self.title_item.setPlainText("State")
@@ -405,8 +422,8 @@ class Node(QGraphicsItem):
             # Default blue title background
             self.title_color = QColor("#3498db")  # Blue
         
-        # Keep border blue for all types
-        self.border_color = QColor("#3498db")
+        # Keep border consistent neutral for all types
+        self.border_color = QColor("#747574")
         
         # Force redraw
         self.update()
@@ -955,12 +972,17 @@ class NodeEditorWindow(QMainWindow):
     
     def initUI(self):
         # Set window properties
-        self.setWindowTitle("Node Editor")
+        self.setWindowTitle("The Modeller")
         self.setGeometry(100, 100, 1200, 800)
         
         # Create toolbar
         toolbar = self.addToolBar("Main Toolbar")
         toolbar.setMovable(False)
+        
+        # Add an expanding spacer before actions to center the group
+        left_spacer = QWidget()
+        left_spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        toolbar.addWidget(left_spacer)
         
         # Add node type buttons
         statemachine_action = toolbar.addAction("StateMachine")
@@ -970,20 +992,34 @@ class NodeEditorWindow(QMainWindow):
         state_action = toolbar.addAction("State")
         state_action.setToolTip("Apply State type (Orange) to selected node")
         state_action.triggered.connect(lambda: self.apply_node_type("State"))
+
+        # Set icons for StateMachine and State actions (SVG-based for crisp scaling) with labels
+        sm_hex = "#27ae60"  # base StateMachine title color
+        sm_qc = QColor(sm_hex)
+        # 40% darker => factor ≈ 166 (since QColor.darker(200) => 50% darker)
+        st_qc = QColor(sm_qc).darker(166)
+        statemachine_action.setIcon(self.make_state_node_svg_icon(24, title_color=sm_hex, label="M"))
+        state_action.setIcon(self.make_state_node_svg_icon(24, title_color=st_qc.name(), label="S"))
         
         toolbar.addSeparator()
         
-        # Add delete button to toolbar
+        # Delete selected items action with custom red cross icon (SVG)
         delete_action = toolbar.addAction("Delete")
-        delete_action.setToolTip("Delete selected items (Nodes or Edges) - Shortcut: Delete or Backspace")
-        delete_action.setShortcut("Delete")  # Primary shortcut
+        delete_action.setToolTip("Delete selected items")
+        delete_action.setIcon(self.make_red_cross_svg_icon(24))
         delete_action.triggered.connect(self.delete_selected_items)
+        delete_action.setShortcut("Delete")  # Primary shortcut
         
         # Add Backspace as an alternative shortcut
         from PyQt5.QtWidgets import QShortcut
         from PyQt5.QtGui import QKeySequence
         backspace_shortcut = QShortcut(QKeySequence(Qt.Key_Backspace), self)
         backspace_shortcut.activated.connect(self.delete_selected_items)
+        
+        # Add an expanding spacer after actions to keep group centered
+        right_spacer = QWidget()
+        right_spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
+        toolbar.addWidget(right_spacer)
         
         # Create a central widget and layout
         central_widget = QWidget()
@@ -1082,6 +1118,77 @@ class NodeEditorWindow(QMainWindow):
         reset_zoom_action = view_menu.addAction("Reset Zoom")
         reset_zoom_action.setShortcut("Ctrl+0")
         reset_zoom_action.triggered.connect(self.resetZoom)
+
+    def make_red_cross_circle_icon(self, size=24, cross_width=3, circle_width=2,
+                                   cross_color=QColor("#ff3b30"), circle_color=QColor("#ff3b30")) -> QIcon:
+        """Create a red cross inside a circle icon for toolbar buttons."""
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+
+        painter = QPainter(pm)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+
+        # Circle
+        painter.setPen(QPen(circle_color, circle_width))
+        painter.setBrush(Qt.NoBrush)
+        r = size / 2 - circle_width
+        center = pm.rect().center()
+        painter.drawEllipse(center, r, r)
+
+        # Cross
+        painter.setPen(QPen(cross_color, cross_width, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin))
+        margin = int(size * 0.28)
+        painter.drawLine(margin, margin, size - margin, size - margin)
+        painter.drawLine(size - margin, margin, margin, size - margin)
+        painter.end()
+
+        return QIcon(pm)
+
+    def make_red_cross_svg_icon(self, size=24) -> QIcon:
+        """Create a crisp red cross 'X' icon from inline SVG (scales cleanly)."""
+        svg = f"""
+        <svg width=\"{size}\" height=\"{size}\" viewBox=\"0 0 24 24\" fill=\"none\"
+             xmlns=\"http://www.w3.org/2000/svg\">
+          <path d=\"M6 6 L18 18 M18 6 L6 18\"
+                stroke=\"#E74C3C\" stroke-width=\"3\" stroke-linecap=\"round\"/>
+        </svg>
+        """
+        renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        painter = QPainter(pm)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        renderer.render(painter)
+        painter.end()
+        return QIcon(pm)
+    
+    def make_state_node_svg_icon(self, size=24, title_color="#e67e22", label=None) -> QIcon:
+        """Create a node-like icon: rounded rect with colored title bar (SVG).
+        Optionally draws a centered label (e.g., 'S' or 'M')."""
+        border_color = "#747574"
+        body_color = "#2c3e50"
+        radius = 4
+        bar_h = 8
+        stroke_w = 2
+        # Optional centered label
+        label_svg = ""
+        if label:
+            # White, bold, centered. Position slightly below center for visual balance.
+            # font-size chosen to fit within 24x24 while readable.
+            label_svg = f"<text x=\"12\" y=\"15\" text-anchor=\"middle\" dominant-baseline=\"middle\" \
+                             font-family=\"Arial, Helvetica, sans-serif\" font-size=\"9\" font-weight=\"700\" \
+                             fill=\"#FFFFFF\">{label}</text>"
+        svg = f"""
+        <svg width=\"{size}\" height=\"{size}\" viewBox=\"0 0 24 24\" fill=\"none\"
+             xmlns=\"http://www.w3.org/2000/svg\">\n          <defs>\n            <clipPath id=\"rrect\">\n              <rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"{radius}\" ry=\"{radius}\"/>\n            </clipPath>\n          </defs>\n          <rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"{radius}\" ry=\"{radius}\" fill=\"{body_color}\"/>\n          <g clip-path=\"url(#rrect)\">\n            <rect x=\"3\" y=\"3\" width=\"18\" height=\"{bar_h}\" fill=\"{title_color}\"/>\n          </g>\n          <rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"{radius}\" ry=\"{radius}\" stroke=\"{border_color}\" stroke-width=\"{stroke_w}\" fill=\"none\"/>\n          {label_svg}\n        </svg>\n        """
+        renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        painter = QPainter(pm)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        renderer.render(painter)
+        painter.end()
+        return QIcon(pm)
     
     def zoomIn(self):
         self.view.scale(self.view.zoom_in_factor, self.view.zoom_in_factor)

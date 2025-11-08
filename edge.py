@@ -101,6 +101,9 @@ class EdgeTitleItem(QGraphicsTextItem):
         self._orig_text = ""
         self.setTextInteractionFlags(Qt.NoTextInteraction)
         self.setFlag(QGraphicsItem.ItemIsFocusable, True)
+        self.setFlag(QGraphicsItem.ItemIsSelectable, True)
+        # Explicitly accept left-button clicks/double-clicks
+        self.setAcceptedMouseButtons(Qt.LeftButton)
         self.setDefaultTextColor(QColor(255, 255, 255))
         self.setZValue(10)
         # Keep text size constant when zooming
@@ -110,13 +113,20 @@ class EdgeTitleItem(QGraphicsTextItem):
         self._orig_text = self.toPlainText()
         self.setTextInteractionFlags(Qt.TextEditorInteraction)
         self.setFocus(Qt.MouseFocusReason)
-        super().mouseDoubleClickEvent(event)
+        event.accept()  # Stop propagation so nodes/edges don't consume it
+        # Do not call super here to avoid default selection behavior interfering
 
     def focusOutEvent(self, event):
         # Commit changes on focus out
         self.setTextInteractionFlags(Qt.NoTextInteraction)
         self.edge.set_title(self.toPlainText())
         super().focusOutEvent(event)
+
+    def mousePressEvent(self, event):
+        # Ensure we receive focus on click to allow editing
+        self.setFocus(Qt.MouseFocusReason)
+        event.accept()
+        # Don't call super to avoid text selection on single click
 
     def keyPressEvent(self, event):
         key = event.key()
@@ -231,7 +241,7 @@ class Edge(QGraphicsPathItem):
         self.waypoint_ratio = 0.5  # Ratio (0-1) of waypoint position between start and end X
         
         # Edge styling
-        self.edge_color = QColor(100, 150, 200)  # Light blue
+        self.edge_color = QColor("#747574")  # Neutral gray default
         self.selected_color = QColor(255, 140, 0)  # Orange (match node selection)
         # Pre-create pens for normal and selected states
         self.normal_pen = QPen(self.edge_color, 3, Qt.SolidLine, Qt.RoundCap, Qt.RoundJoin)
@@ -243,9 +253,11 @@ class Edge(QGraphicsPathItem):
         self._arrow_end = None
         self._arrow_prev = None
 
-        # Title label
+        # Title label (separate scene item so it can appear above nodes)
         self.title_item = EdgeTitleItem(self)
-        self.title_item.setParentItem(self)
+        # Do NOT parent to the edge so Z-order can exceed nodes
+        # We'll add it to the scene on demand in update_path()
+        self.title_item.setZValue(2000)
         self.setZValue(-1)  # Draw below nodes
         self.setFlag(QGraphicsPathItem.ItemIsSelectable)
         self.setFlag(QGraphicsPathItem.ItemIsFocusable)  # Allow keyboard events
@@ -425,6 +437,15 @@ class Edge(QGraphicsPathItem):
             self._arrow_end = end_pos
         
         self.setPath(path)
+        
+        # Ensure title item is in the scene and positioned
+        try:
+            if self.scene() is not None and self.title_item.scene() is None:
+                self.scene().addItem(self.title_item)
+        except Exception:
+            pass
+        
+        # Update title position along the path (midpoint)
         # Update title position along the path (midpoint)
         self.update_title_position()
         
@@ -472,7 +493,9 @@ class Edge(QGraphicsPathItem):
         # Center the text horizontally and place slightly above the path
         br = self.title_item.boundingRect()
         offset_y = 6
-        self.title_item.setPos(mid.x() - br.width() / 2.0, mid.y() - br.height() - offset_y)
+        # Map edge-local coordinates to scene since title_item is a scene-level item
+        scene_mid = self.mapToScene(mid)
+        self.title_item.setPos(scene_mid.x() - br.width() / 2.0, scene_mid.y() - br.height() - offset_y)
     
     def mousePressEvent(self, event):
         """Handle mouse press to set focus"""
@@ -520,6 +543,9 @@ class Edge(QGraphicsPathItem):
             self.end_control.scene().removeItem(self.end_control)
         if self.waypoint_control and self.waypoint_control.scene():
             self.waypoint_control.scene().removeItem(self.waypoint_control)
+        # Remove title item
+        if self.title_item and self.title_item.scene():
+            self.title_item.scene().removeItem(self.title_item)
         
         # Remove from scene
         if self.scene():
