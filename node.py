@@ -54,11 +54,11 @@ class NodeEditorGraphicsView(QGraphicsView):
         
     def drawBackground(self, painter, rect):
         """Draw the background grid"""
-        # Call the parent method to draw the default background
-        super().drawBackground(painter, rect)
+        # Fill the background with the specified color
+        painter.fillRect(rect, QColor("#292826"))
         
         # Set up the pen for minor grid lines (10% darker)
-        minor_pen = QPen(QColor(120, 120, 120, 100))  # Slightly darker gray with transparency
+        minor_pen = QPen(QColor("#424241"))  # Slightly darker gray with transparency
         minor_pen.setWidth(1)
         painter.setPen(minor_pen)
         
@@ -87,7 +87,7 @@ class NodeEditorGraphicsView(QGraphicsView):
             y += self.grid_size
             
         # Draw major grid lines (10% darker)
-        major_pen = QPen(QColor(90, 90, 90, 150))  # Slightly darker gray
+        major_pen = QPen(QColor("#424241"))  # Slightly darker gray
         major_pen.setWidth(1)
         painter.setPen(major_pen)
         
@@ -392,6 +392,9 @@ class Node(QGraphicsItem):
         # Node type property (None, "type1", or "type2")
         self.node_type = None
         
+        # Initial state property (only for State nodes)
+        self.is_initial = False
+        
         # Set position if provided
         if pos is not None:
             self.setPos(pos)
@@ -437,6 +440,15 @@ class Node(QGraphicsItem):
         
         # Force redraw
         self.update()
+    
+    def set_initial_state(self, is_initial):
+        """Mark this node as an initial state (only for State nodes)"""
+        if self.node_type == "State":
+            self.is_initial = is_initial
+            # Force redraw to show/hide the indicator
+            self.update()
+            return True
+        return False
     
     def setup_container(self):
         """Set up this node as a container for child nodes"""
@@ -554,6 +566,17 @@ class Node(QGraphicsItem):
                 max(0, self.height - self.title_height - 2 * self.padding)
             )
             painter.drawRoundedRect(container_rect, self.edge_roundness, self.edge_roundness)
+        
+        # Draw initial state indicator (white circle at top-right corner) for State nodes marked as initial
+        if self.is_initial and self.node_type == "State":
+            circle_radius = 7.5  # 15 pixel diameter = 7.5 pixel radius
+            margin = self.title_height / 2  # Half of title bar height
+            circle_x = self.rect.width() - margin  # Equal distance from right edge
+            circle_y = margin  # Equal distance from top edge
+            
+            painter.setBrush(QBrush(Qt.white))
+            painter.setPen(QPen(QColor("#2c3e50"), 1))  # Thin dark border for contrast
+            painter.drawEllipse(QPointF(circle_x, circle_y), circle_radius, circle_radius)
     
     def update_size(self):
         """Update the node size based on content"""
@@ -996,11 +1019,11 @@ class NodeEditorWindow(QMainWindow):
         
         # Add node type buttons
         statemachine_action = toolbar.addAction("StateMachine")
-        statemachine_action.setToolTip("Apply StateMachine type (Green) to selected node")
+        statemachine_action.setToolTip("Apply StateMachine type to selected node")
         statemachine_action.triggered.connect(lambda: self.apply_node_type("StateMachine"))
         
         state_action = toolbar.addAction("State")
-        state_action.setToolTip("Apply State type (Orange) to selected node")
+        state_action.setToolTip("Apply State type to selected node")
         state_action.triggered.connect(lambda: self.apply_node_type("State"))
 
         # Set icons for StateMachine and State actions (SVG-based for crisp scaling) with labels
@@ -1010,6 +1033,14 @@ class NodeEditorWindow(QMainWindow):
         st_qc = QColor(sm_qc).darker(166)
         statemachine_action.setIcon(self.make_state_node_svg_icon(24, title_color=sm_hex, label="M"))
         state_action.setIcon(self.make_state_node_svg_icon(24, title_color=st_qc.name(), label="S"))
+        
+        toolbar.addSeparator()
+        
+        # Add Initial button to mark State nodes as initial
+        initial_action = toolbar.addAction("Initial")
+        initial_action.setToolTip("Mark selected State node as initial")
+        initial_action.setIcon(self.make_initial_state_svg_icon(24))
+        initial_action.triggered.connect(self.mark_as_initial)
         
         toolbar.addSeparator()
         
@@ -1086,6 +1117,38 @@ class NodeEditorWindow(QMainWindow):
         # Update status bar
         type_name = "StateMachine (Green)" if node_type == "StateMachine" else "State (Orange)"
         self.statusBar().showMessage(f"Applied {type_name} to {len(nodes)} node(s)")
+    
+    def mark_as_initial(self):
+        """Mark selected State nodes as initial states"""
+        selected_items = self.scene.selectedItems()
+        
+        # Filter to only Node items
+        nodes = [item for item in selected_items if isinstance(item, Node)]
+        
+        if not nodes:
+            self.statusBar().showMessage("No nodes selected")
+            return
+        
+        # Count how many nodes were successfully marked
+        marked_count = 0
+        non_state_count = 0
+        
+        for node in nodes:
+            # Toggle initial state for State nodes
+            if node.node_type == "State":
+                # Toggle the initial state
+                node.set_initial_state(not node.is_initial)
+                marked_count += 1
+            else:
+                non_state_count += 1
+        
+        # Update status bar with appropriate message
+        if marked_count > 0 and non_state_count == 0:
+            self.statusBar().showMessage(f"Toggled initial state for {marked_count} State node(s)")
+        elif marked_count > 0 and non_state_count > 0:
+            self.statusBar().showMessage(f"Toggled initial state for {marked_count} State node(s). {non_state_count} non-State node(s) ignored")
+        else:
+            self.statusBar().showMessage("No State nodes selected. Only State nodes can be marked as initial")
     
     def delete_selected_items(self):
         """Delete all selected items (nodes and edges)"""
@@ -1173,6 +1236,7 @@ class NodeEditorWindow(QMainWindow):
                     },
                     'node_type': getattr(node, 'node_type', None),
                     'is_container': node.is_container,
+                    'is_initial': getattr(node, 'is_initial', False),
                     'parent_id': id(node.parent_node) if hasattr(node, 'parent_node') and node.parent_node else None,
                     'id': id(node)  # Use object id as unique identifier
                 }
@@ -1286,6 +1350,9 @@ class NodeEditorWindow(QMainWindow):
                 # Restore node type
                 if node_data.get('node_type'):
                     node.set_node_type(node_data['node_type'])
+                
+                # Restore initial state property
+                node.is_initial = node_data.get('is_initial', False)
                 
                 # Restore container status
                 node.is_container = node_data.get('is_container', False)
@@ -1484,6 +1551,23 @@ class NodeEditorWindow(QMainWindow):
         svg = f"""
         <svg width=\"{size}\" height=\"{size}\" viewBox=\"0 0 24 24\" fill=\"none\"
              xmlns=\"http://www.w3.org/2000/svg\">\n          <defs>\n            <clipPath id=\"rrect\">\n              <rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"{radius}\" ry=\"{radius}\"/>\n            </clipPath>\n          </defs>\n          <rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"{radius}\" ry=\"{radius}\" fill=\"{body_color}\"/>\n          <g clip-path=\"url(#rrect)\">\n            <rect x=\"3\" y=\"3\" width=\"18\" height=\"{bar_h}\" fill=\"{title_color}\"/>\n          </g>\n          <rect x=\"3\" y=\"3\" width=\"18\" height=\"18\" rx=\"{radius}\" ry=\"{radius}\" stroke=\"{border_color}\" stroke-width=\"{stroke_w}\" fill=\"none\"/>\n          {label_svg}\n        </svg>\n        """
+        renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        painter = QPainter(pm)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        renderer.render(painter)
+        painter.end()
+        return QIcon(pm)
+    
+    def make_initial_state_svg_icon(self, size=24) -> QIcon:
+        """Create an icon with a white circle (representing initial state indicator)."""
+        svg = f"""
+        <svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none"
+             xmlns="http://www.w3.org/2000/svg">
+          <circle cx="12" cy="12" r="6" fill="#FFFFFF" stroke="#2c3e50" stroke-width="2"/>
+        </svg>
+        """
         renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
         pm = QPixmap(size, size)
         pm.fill(Qt.transparent)

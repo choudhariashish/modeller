@@ -13,6 +13,7 @@ A PyQt5-based node editor application with orthogonal edge routing and interacti
 - Drag and drop nodes
 - Resize nodes using bottom-right handle
 - Change node types (StateMachine/State) with toolbar buttons
+- Mark State nodes as initial states (shows white circle indicator)
 - Double-click to edit node titles
 - Delete nodes via toolbar button or Delete/Backspace keys
 
@@ -34,6 +35,7 @@ A PyQt5-based node editor application with orthogonal edge routing and interacti
   - All nodes (top-level and nested children)
   - Parent-child relationships
   - Node positions, sizes, and types
+  - Initial state markers for State nodes
   - All edges with connection points and waypoints
   - Edge titles
 
@@ -95,7 +97,10 @@ python main.py
 - **Drag bottom-right handle**: Resize node
 - **Double-click node title**: Edit node title
 - **Right-click**: Context menu for adding nodes
-- **Toolbar buttons**: Change node type (StateMachine/State)
+- **Toolbar buttons**: 
+  - **StateMachine**: Apply StateMachine type (green title bar)
+  - **State**: Apply State type (darker green title bar)
+  - **Initial**: Mark selected State node as initial (toggles white circle indicator)
 
 #### Edge Operations
 - **Ctrl + Click + Drag**: Create edge between nodes
