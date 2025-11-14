@@ -1,7 +1,7 @@
 {
   "nodes": [
     {
-      "title": "Node 1",
+      "title": "StateMachine",
       "pos": {
         "x": -478.0,
         "y": -252.0
@@ -12,13 +12,14 @@
         "width": 977.0,
         "height": 539.0
       },
-      "node_type": null,
+      "node_type": "StateMachine",
       "is_container": true,
+      "is_initial": false,
       "parent_id": null,
-      "id": 4657956896
+      "id": 4592007488
     },
     {
-      "title": "Child Node",
+      "title": "State",
       "pos": {
         "x": 131.0,
         "y": 139.0
@@ -29,13 +30,14 @@
         "width": 200.0,
         "height": 100.0
       },
-      "node_type": null,
+      "node_type": "State",
       "is_container": false,
-      "parent_id": 4657956896,
-      "id": 4657958480
+      "is_initial": true,
+      "parent_id": 4592007488,
+      "id": 4592007776
     },
     {
-      "title": "Child Node",
+      "title": "State",
       "pos": {
         "x": 556.0,
         "y": 275.0
@@ -46,16 +48,17 @@
         "width": 200.0,
         "height": 100.0
       },
-      "node_type": null,
+      "node_type": "State",
       "is_container": false,
-      "parent_id": 4657956896,
-      "id": 4658058288
+      "is_initial": false,
+      "parent_id": 4592007488,
+      "id": 4592008064
     }
   ],
   "edges": [
     {
-      "start_node_id": 4657958480,
-      "end_node_id": 4658058288,
+      "start_node_id": 4592007776,
+      "end_node_id": 4592008064,
       "title": "Edge 1",
       "waypoint_ratio": 1.0,
       "start_offset": {
@@ -68,8 +71,8 @@
       }
     },
     {
-      "start_node_id": 4658058288,
-      "end_node_id": 4657958480,
+      "start_node_id": 4592008064,
+      "end_node_id": 4592007776,
       "title": "Edge 2",
       "waypoint_ratio": 1.0,
       "start_offset": {
