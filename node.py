@@ -1351,6 +1351,10 @@ class NodeEditorWindow(QMainWindow):
                 if node_data.get('node_type'):
                     node.set_node_type(node_data['node_type'])
                 
+                # Restore the original title from JSON (after set_node_type which may overwrite it)
+                node.title = node_data['title']
+                node.title_item.setPlainText(node_data['title'])
+                
                 # Restore initial state property
                 node.is_initial = node_data.get('is_initial', False)
                 
