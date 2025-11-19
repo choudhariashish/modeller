@@ -6,10 +6,93 @@ from PyQt5.QtWidgets import (QApplication, QGraphicsView, QGraphicsScene,
                              QGraphicsRectItem, QGraphicsTextItem, QGraphicsPathItem,
                              QGraphicsEllipseItem, QMenu, QAction, QLineEdit, QSizePolicy,
                              QFileDialog, QMessageBox)
-from PyQt5.QtCore import Qt, QRectF, QPointF, QSizeF, QByteArray
+from PyQt5.QtCore import Qt, QRectF, QPointF, QSizeF, QByteArray, QTimer, QPropertyAnimation, pyqtProperty
 from PyQt5.QtGui import QPainter, QPen, QColor, QWheelEvent, QBrush, QFont, QPainterPath, QIcon, QPixmap
 from PyQt5.QtSvg import QSvgRenderer
 from edge import Edge, EdgeControlPoint, WaypointControlPoint, EdgeTitleItem
+
+
+class UserActionSignalDot(QWidget):
+    """A widget that displays a colored dot in the status bar to signal user actions"""
+    
+    def __init__(self, parent=None):
+        super().__init__(parent)
+        self.setFixedSize(10, 20)  # 10px dot width, 20px height for vertical centering
+        self._dot_color = QColor("#4CAF50")  # Default green color
+        self._default_color = QColor("#4CAF50")
+        
+    def paintEvent(self, event):
+        """Paint the dot"""
+        painter = QPainter(self)
+        painter.setRenderHint(QPainter.Antialiasing)
+        painter.setBrush(QBrush(self._dot_color))
+        painter.setPen(Qt.NoPen)
+        painter.drawEllipse(0, 5, 10, 10)  # 10px diameter, centered vertically
+        
+    @pyqtProperty(QColor)
+    def dotColor(self):
+        return self._dot_color
+    
+    @dotColor.setter
+    def dotColor(self, color):
+        self._dot_color = color
+        self.update()
+        
+    def blink(self, color, duration=300):
+        """Blink the dot with a specific color for a duration in milliseconds"""
+        # Set the blink color
+        self._dot_color = color
+        self.update()
+        
+        # Reset to default color after duration
+        QTimer.singleShot(duration, self._reset_color)
+        
+    def _reset_color(self):
+        """Reset the dot to its default color"""
+        self._dot_color = self._default_color
+        self.update()
+
+
+class UserActionMonitor:
+    """Monitor and signal user actions through the status bar dot"""
+    
+    def __init__(self, signal_dot):
+        """
+        Initialize the user action monitor
+        
+        Args:
+            signal_dot (UserActionSignalDot): The status bar dot widget to control
+        """
+        self.signal_dot = signal_dot
+        self.actions = {
+            'node_moved': {'color': QColor("#FF9800"), 'duration': 300},  # Orange
+            'node_created': {'color': QColor("#2196F3"), 'duration': 300},  # Blue
+            'node_deleted': {'color': QColor("#F44336"), 'duration': 300},  # Red
+            'edge_created': {'color': QColor("#9C27B0"), 'duration': 300},  # Purple
+        }
+        
+    def signal_action(self, action_type):
+        """
+        Signal a user action by blinking the dot
+        
+        Args:
+            action_type (str): Type of action ('node_moved', 'node_created', etc.)
+        """
+        if action_type in self.actions:
+            action = self.actions[action_type]
+            self.signal_dot.blink(action['color'], action['duration'])
+        
+    def add_action_type(self, action_type, color, duration=300):
+        """
+        Add a new action type to monitor
+        
+        Args:
+            action_type (str): Name of the action type
+            color (QColor): Color to blink when this action occurs
+            duration (int): Duration of the blink in milliseconds
+        """
+        self.actions[action_type] = {'color': color, 'duration': duration}
+
 
 class NodeEditorGraphicsView(QGraphicsView):
     def __init__(self, scene, parent=None):
@@ -174,7 +257,23 @@ class NodeEditorGraphicsView(QGraphicsView):
         
         # Create and add the child node
         child = Node("Child Node", local_pos, parent_node)
+        
+        # Set the action monitor reference (inherit from parent or get from main window)
+        main_window = None
+        if hasattr(self.parent(), 'action_monitor'):
+            child.action_monitor = self.parent().action_monitor
+            main_window = self.parent()
+        elif parent_node.action_monitor:
+            child.action_monitor = parent_node.action_monitor
+            # Get main window
+            if hasattr(self, 'window'):
+                main_window = self.window()
+            
         parent_node.add_child_node(child)
+        
+        # Record child node creation for undo
+        if main_window and hasattr(main_window, 'record_node_creation'):
+            main_window.record_node_creation(child, parent_node)
         
         # Make sure the parent node is large enough
         parent_node.update()
@@ -199,6 +298,11 @@ class NodeEditorGraphicsView(QGraphicsView):
         """Add a new node at the specified position"""
         scene_pos = self.mapToScene(pos)
         node = Node("New Node", scene_pos)
+        
+        # Set the action monitor reference from main window
+        if hasattr(self.parent(), 'action_monitor'):
+            node.action_monitor = self.parent().action_monitor
+            
         self.scene.addItem(node)
     
     def delete_node(self, node):
@@ -339,6 +443,14 @@ class NodeEditorGraphicsView(QGraphicsView):
                 if not hasattr(self.scene, 'edges'):
                     self.scene.edges = []
                 self.scene.edges.append(self.temp_edge)
+                
+                # Record edge creation for undo
+                main_window = None
+                if hasattr(self, 'window'):
+                    main_window = self.window()
+                
+                if main_window and hasattr(main_window, 'record_edge_creation'):
+                    main_window.record_edge_creation(self.temp_edge)
             else:
                 # Remove the temporary edge if not connected to a node
                 self.scene.removeItem(self.temp_edge)
@@ -376,6 +488,11 @@ class Node(QGraphicsItem):
         self.edge_roundness = 5.0
         self.resize_handle_size = 10
         self.resize_handle = QRectF()
+        
+        # User action monitoring
+        self.action_monitor = None  # Will be set by the main window
+        self.is_being_moved = False
+        self.position_before_move = None  # Track position before movement for undo
         
         # Node state
         self.child_nodes = []
@@ -697,19 +814,26 @@ class Node(QGraphicsItem):
         else:
             self.setCursor(Qt.ArrowCursor)
         super().hoverMoveEvent(event)
-        
+    
     def hoverLeaveEvent(self, event):
         """Handle hover leave event"""
         super().hoverLeaveEvent(event)
-        
+    
     def mousePressEvent(self, event):
         """Handle mouse press events for resizing and dot marking"""
         try:
+            if event.button() == Qt.LeftButton:
+                # Capture position before any movement for undo functionality (do this for all left clicks)
+                if not self.is_over_resize_handle(event.pos()):
+                    self.position_before_move = self.pos()
+            
             if event.button() == Qt.LeftButton and self.isSelected():
                 if self.is_over_resize_handle(event.pos()):
                     self.is_resizing = True
                     self.old_rect = self.rect
                     self.old_pos = event.pos()
+                    # Capture rect before resizing for undo functionality
+                    self.rect_before_resize = QRectF(self.rect)
                     event.accept()
                     return
                 
@@ -826,9 +950,16 @@ class Node(QGraphicsItem):
         
         # Update the title if user clicked OK and entered text
         if ok and new_title.strip() and new_title != self.title:
+            old_title = self.title
             self.title = new_title.strip()
             self.title_item.setPlainText(self.title)
             self.update()
+            
+            # Record the title change for undo
+            if self.scene() and self.scene().views():
+                view = self.scene().views()[0]
+                if hasattr(view, 'window') and hasattr(view.window(), 'record_node_title_change'):
+                    view.window().record_node_title_change(self, old_title, self.title)
         
     def mouseMoveEvent(self, event):
         """Handle mouse move events for resizing"""
@@ -861,18 +992,58 @@ class Node(QGraphicsItem):
         """Handle mouse release events for resizing"""
         if hasattr(self, 'is_resizing') and self.is_resizing:
             self.is_resizing = False
+            
+            # Record resize for undo if the rect actually changed
+            if hasattr(self, 'rect_before_resize') and self.rect_before_resize != self.rect:
+                # Get the main window to record the undo action
+                if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+                    view = self.scene().views()[0]
+                    main_window = None
+                    if hasattr(view, 'window'):
+                        main_window = view.window()
+                    
+                    if main_window and hasattr(main_window, 'record_node_resize'):
+                        main_window.record_node_resize(self, self.rect_before_resize, self.rect)
+                
+                self.rect_before_resize = None
+            
             # After resizing, update Z-order of all nodes in the scene
             self.update_z_order()
         super().mouseReleaseEvent(event)
         
     def itemChange(self, change, value):
         if change == QGraphicsItem.ItemPositionChange and self.scene():
+            # Mark that the node is being moved
+            self.is_being_moved = True
             # Update Z-order when position changes
             self.update_z_order()
             
         elif change == QGraphicsItem.ItemPositionHasChanged and self.scene():
             # Update edges for this node and all descendants recursively
             self.update_descendant_edges()
+            
+            # Record the movement for undo if position changed
+            if self.position_before_move is not None and self.position_before_move != self.pos():
+                # Get the main window to record the undo action
+                if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+                    view = self.scene().views()[0]
+                    # Try to get the main window - it could be view.parent() or we need to traverse up
+                    main_window = None
+                    if hasattr(view, 'window'):
+                        main_window = view.window()
+                    
+                    if main_window and hasattr(main_window, 'record_node_movement'):
+                        main_window.record_node_movement(self, self.position_before_move, self.pos())
+                
+                # Signal that node movement is complete
+                if self.action_monitor:
+                    self.action_monitor.signal_action('node_moved')
+                
+                self.position_before_move = None
+            
+            # Reset the moving flag
+            if self.is_being_moved:
+                self.is_being_moved = False
             
         elif change == QGraphicsItem.ItemSelectedHasChanged and self.scene():
             # When selection changes, ensure selected items are on top
@@ -1044,6 +1215,13 @@ class NodeEditorWindow(QMainWindow):
         
         toolbar.addSeparator()
         
+        # Undo action with custom undo icon (SVG)
+        undo_action = toolbar.addAction("Undo")
+        undo_action.setToolTip("Undo last action")
+        undo_action.setIcon(self.make_undo_svg_icon(24))
+        undo_action.triggered.connect(self.undo_action)
+        undo_action.setShortcut("Ctrl+Z")
+        
         # Delete selected items action with custom red cross icon (SVG)
         delete_action = toolbar.addAction("Delete")
         delete_action.setToolTip("Delete selected items")
@@ -1090,8 +1268,26 @@ class NodeEditorWindow(QMainWindow):
         self.edge_start = None
         self.current_edge = None
         
+        # Undo stack for node movements
+        self.undo_stack = []  # Stack of (node, old_pos, new_pos) tuples
+        self.max_undo_stack_size = 50  # Limit stack size to prevent memory issues
+        
         # Set up the status bar
         self.statusBar().showMessage("Ready")
+        
+        # Create the user action signal dot (15 pixels from right edge)
+        self.action_signal_dot = UserActionSignalDot()
+        
+        # Add spacing widget to position dot 15 pixels from right edge
+        spacer = QWidget()
+        spacer.setFixedWidth(15)
+        
+        # Add the dot widget to the status bar (right side)
+        self.statusBar().addPermanentWidget(self.action_signal_dot)
+        self.statusBar().addPermanentWidget(spacer)
+        
+        # Initialize the user action monitor
+        self.action_monitor = UserActionMonitor(self.action_signal_dot)
         
         # Create a simple menu
         self.createMenu()
@@ -1110,9 +1306,14 @@ class NodeEditorWindow(QMainWindow):
             self.statusBar().showMessage("No nodes selected")
             return
         
-        # Apply the type to all selected nodes
+        # Apply the type to all selected nodes and record for undo
         for node in nodes:
+            # Record the old type and title before changing
+            old_type = node.node_type
+            old_title = node.title  # Capture title before it gets changed
             node.set_node_type(node_type)
+            # Record the type change for undo
+            self.record_node_type_change(node, old_type, node_type, old_title)
         
         # Update status bar
         type_name = "StateMachine (Green)" if node_type == "StateMachine" else "State (Orange)"
@@ -1150,6 +1351,546 @@ class NodeEditorWindow(QMainWindow):
         else:
             self.statusBar().showMessage("No State nodes selected. Only State nodes can be marked as initial")
     
+    def record_node_movement(self, node, old_pos, new_pos):
+        """Record a node movement for undo functionality"""
+        # Add to undo stack
+        self.undo_stack.append({
+            'type': 'node_move',
+            'node': node,
+            'old_pos': QPointF(old_pos),  # Make a copy
+            'new_pos': QPointF(new_pos)   # Make a copy
+        })
+        
+        # Limit stack size
+        if len(self.undo_stack) > self.max_undo_stack_size:
+            self.undo_stack.pop(0)  # Remove oldest entry
+    
+    def record_node_creation(self, node, parent):
+        """Record a node creation for undo functionality"""
+        self.undo_stack.append({
+            'type': 'node_create',
+            'node': node,
+            'parent': parent,
+            'position': QPointF(node.pos())
+        })
+        
+        # Limit stack size
+        if len(self.undo_stack) > self.max_undo_stack_size:
+            self.undo_stack.pop(0)
+    
+    def record_node_deletion(self, node):
+        """Record a node deletion for undo functionality"""
+        # Capture all edges connected to this node
+        connected_edges = []
+        if hasattr(self.scene, 'edges') and self.scene.edges:
+            for edge in self.scene.edges:
+                if edge._start_node == node or edge._end_node == node:
+                    # Capture edge data using node IDs instead of references
+                    edge_data = {
+                        'start_node_id': id(edge._start_node),
+                        'end_node_id': id(edge._end_node),
+                        'title': edge.title_item.toPlainText() if edge.title_item else "",
+                        'waypoint_ratio': edge.waypoint_ratio if edge.waypoint_ratio is not None else 0.5,
+                        'start_offset': QPointF(edge.start_control.offset) if edge.start_control else QPointF(0, 0),
+                        'end_offset': QPointF(edge.end_control.offset) if edge.end_control else QPointF(0, 0)
+                    }
+                    connected_edges.append(edge_data)
+        
+        # Capture node state before deletion
+        self.undo_stack.append({
+            'type': 'node_delete',
+            'node_data': {
+                'title': node.title,
+                'position': QPointF(node.pos()),
+                'node_type': node.node_type,
+                'is_initial': node.is_initial,
+                'rect': QRectF(node.rect) if hasattr(node, 'rect') else None,
+                'parent': node.parent_node,
+                'node_id': id(node)  # Store the node's ID for edge reconnection
+            },
+            'connected_edges': connected_edges  # Store connected edges with the node
+        })
+        
+        # Limit stack size
+        if len(self.undo_stack) > self.max_undo_stack_size:
+            self.undo_stack.pop(0)
+    
+    def record_node_type_change(self, node, old_type, new_type, old_title):
+        """Record a node type change for undo functionality"""
+        self.undo_stack.append({
+            'type': 'node_type_change',
+            'node': node,
+            'old_type': old_type,
+            'new_type': new_type,
+            'old_title': old_title  # Capture the title before the type change
+        })
+        
+        # Limit stack size
+        if len(self.undo_stack) > self.max_undo_stack_size:
+            self.undo_stack.pop(0)
+    
+    def record_node_resize(self, node, old_rect, new_rect):
+        """Record a node resize for undo functionality"""
+        self.undo_stack.append({
+            'type': 'node_resize',
+            'node': node,
+            'old_rect': QRectF(old_rect),  # Make a copy
+            'new_rect': QRectF(new_rect)   # Make a copy
+        })
+        
+        # Limit stack size
+        if len(self.undo_stack) > self.max_undo_stack_size:
+            self.undo_stack.pop(0)
+    
+    def record_edge_creation(self, edge):
+        """Record an edge creation for undo functionality"""
+        self.undo_stack.append({
+            'type': 'edge_create',
+            'edge': edge,
+            'start_node': edge._start_node,
+            'end_node': edge._end_node
+        })
+        
+        # Limit stack size
+        if len(self.undo_stack) > self.max_undo_stack_size:
+            self.undo_stack.pop(0)
+    
+    def record_edge_deletion(self, edge):
+        """Record an edge deletion for undo functionality"""
+        from edge import Edge
+        self.undo_stack.append({
+            'type': 'edge_delete',
+            'edge_data': {
+                'start_node': edge._start_node,
+                'end_node': edge._end_node,
+                'title': edge.title_item.toPlainText() if edge.title_item else "",
+                'waypoint_ratio': edge.waypoint_ratio,
+                'start_offset': QPointF(edge.start_control.offset) if edge.start_control else QPointF(0, 0),
+                'end_offset': QPointF(edge.end_control.offset) if edge.end_control else QPointF(0, 0)
+            }
+        })
+        
+        # Limit stack size
+        if len(self.undo_stack) > self.max_undo_stack_size:
+            self.undo_stack.pop(0)
+    
+    def record_edge_connection_change(self, edge, is_start, old_offset, new_offset):
+        """Record an edge connection point change for undo functionality"""
+        self.undo_stack.append({
+            'type': 'edge_connection_change',
+            'edge': edge,
+            'is_start': is_start,
+            'old_offset': QPointF(old_offset),
+            'new_offset': QPointF(new_offset)
+        })
+        
+        # Limit stack size
+        if len(self.undo_stack) > self.max_undo_stack_size:
+            self.undo_stack.pop(0)
+    
+    def record_edge_waypoint_change(self, edge, old_ratio, new_ratio):
+        """Record an edge waypoint adjustment for undo functionality"""
+        self.undo_stack.append({
+            'type': 'edge_waypoint_change',
+            'edge': edge,
+            'old_ratio': old_ratio,
+            'new_ratio': new_ratio
+        })
+        
+        # Limit stack size
+        if len(self.undo_stack) > self.max_undo_stack_size:
+            self.undo_stack.pop(0)
+    
+    def record_node_title_change(self, node, old_title, new_title):
+        """Record a node title change for undo functionality"""
+        self.undo_stack.append({
+            'type': 'node_title_change',
+            'node': node,
+            'old_title': old_title,
+            'new_title': new_title
+        })
+        
+        # Limit stack size
+        if len(self.undo_stack) > self.max_undo_stack_size:
+            self.undo_stack.pop(0)
+    
+    def record_edge_title_change(self, edge, old_title, new_title):
+        """Record an edge title change for undo functionality"""
+        self.undo_stack.append({
+            'type': 'edge_title_change',
+            'edge': edge,
+            'old_title': old_title,
+            'new_title': new_title
+        })
+        
+        # Limit stack size
+        if len(self.undo_stack) > self.max_undo_stack_size:
+            self.undo_stack.pop(0)
+    
+    def undo_action(self):
+        """Undo the last action"""
+        if not self.undo_stack:
+            self.statusBar().showMessage("Nothing to undo", 2000)
+            return
+        
+        # Validate the action before processing
+        if not self.validate_undo_action(self.undo_stack[-1]):
+            # Remove invalid action and try next one
+            self.undo_stack.pop()
+            self.statusBar().showMessage("Cannot undo: References deleted items", 2000)
+            self.undo_action()
+            return
+        
+        # Get the last action from the stack
+        action = self.undo_stack.pop()
+        action_type = action['type']
+        
+        if action_type == 'node_move':
+            node = action['node']
+            old_pos = action['old_pos']
+            
+            # Check if the node still exists in the scene
+            if node.scene() == self.scene:
+                # Temporarily disable position tracking to avoid recording this as a new move
+                node.position_before_move = None
+                node.is_being_moved = False
+                
+                # Move the node back to its old position
+                node.setPos(old_pos)
+                
+                # Update edges
+                node.update_descendant_edges()
+                
+                self.statusBar().showMessage(f"Undone: Node moved back to previous position", 2000)
+            else:
+                self.statusBar().showMessage("Cannot undo: Node no longer exists", 2000)
+                return
+        
+        elif action_type == 'node_create':
+            # Undo node creation by deleting the node
+            node = action['node']
+            parent = action['parent']
+            
+            if node.scene() == self.scene:
+                # Remove from parent's child list if it has a parent
+                if parent and node in parent.child_nodes:
+                    parent.child_nodes.remove(node)
+                
+                # Remove all edges connected to this node
+                edges_to_remove = []
+                if hasattr(self.scene, 'edges') and self.scene.edges:
+                    for edge in self.scene.edges[:]:
+                        if edge._start_node == node or edge._end_node == node:
+                            edges_to_remove.append(edge)
+                
+                for edge in edges_to_remove:
+                    # Remove from scene's edges list
+                    if hasattr(self.scene, 'edges') and edge in self.scene.edges:
+                        self.scene.edges.remove(edge)
+                    # Remove control points and edge from scene
+                    if edge.start_control and edge.start_control.scene():
+                        self.scene.removeItem(edge.start_control)
+                    if edge.end_control and edge.end_control.scene():
+                        self.scene.removeItem(edge.end_control)
+                    if edge.waypoint_control and edge.waypoint_control.scene():
+                        self.scene.removeItem(edge.waypoint_control)
+                    if edge.title_item and edge.title_item.scene():
+                        self.scene.removeItem(edge.title_item)
+                    self.scene.removeItem(edge)
+                
+                # Remove from scene and nodes list
+                self.scene.removeItem(node)
+                if node in self.nodes:
+                    self.nodes.remove(node)
+                
+                self.statusBar().showMessage(f"Undone: Node '{node.title}' creation deleted", 2000)
+            else:
+                self.statusBar().showMessage("Cannot undo: Node already deleted", 2000)
+                return
+        
+        elif action_type == 'node_delete':
+            # Undo node deletion by recreating the node
+            node_data = action['node_data']
+            
+            # Create a new node with the saved data (don't pass position to constructor yet)
+            node = Node(node_data['title'], None, node_data['parent'])
+            node.action_monitor = self.action_monitor
+            
+            # Restore node type
+            if node_data['node_type']:
+                node.set_node_type(node_data['node_type'])
+                # Update title
+                node.title = node_data['title']
+                node.title_item.setPlainText(node_data['title'])
+            
+            # Restore initial state
+            node.is_initial = node_data['is_initial']
+            
+            # Restore rect if available
+            if node_data['rect']:
+                node.rect = node_data['rect']
+                if hasattr(node, 'update_handles'):
+                    node.update_handles()
+            
+            # Add to scene and set position
+            if node_data['parent']:
+                node_data['parent'].add_child_node(node)
+                # For child nodes, set position after adding to parent
+                # The position is relative to the parent
+                node.setPos(node_data['position'])
+            else:
+                self.scene.addItem(node)
+                self.nodes.append(node)
+                # For top-level nodes, set position directly
+                node.setPos(node_data['position'])
+            
+            # Create a mapping from old node ID to the restored node
+            node_id_mapping = {node_data['node_id']: node}
+            
+            # Helper function to find a node by ID in all nodes (including children)
+            def find_node_by_id(node_id):
+                # Check top-level nodes
+                for n in self.nodes:
+                    if id(n) == node_id:
+                        return n
+                    # Check child nodes recursively
+                    def check_children(parent):
+                        for child in parent.child_nodes:
+                            if id(child) == node_id:
+                                return child
+                            result = check_children(child)
+                            if result:
+                                return result
+                        return None
+                    result = check_children(n)
+                    if result:
+                        return result
+                return None
+            
+            # Restore connected edges
+            from edge import Edge
+            if 'connected_edges' in action and action['connected_edges']:
+                for edge_data in action['connected_edges']:
+                    # Find the start and end nodes by ID
+                    start_node = None
+                    end_node = None
+                    
+                    # Check if start node is the restored node
+                    if edge_data['start_node_id'] == node_data['node_id']:
+                        start_node = node
+                    else:
+                        # Find start node in all nodes (including children)
+                        start_node = find_node_by_id(edge_data['start_node_id'])
+                    
+                    # Check if end node is the restored node
+                    if edge_data['end_node_id'] == node_data['node_id']:
+                        end_node = node
+                    else:
+                        # Find end node in all nodes (including children)
+                        end_node = find_node_by_id(edge_data['end_node_id'])
+                    
+                    # Only restore edges where both nodes exist
+                    if start_node and end_node:
+                        # Create new edge
+                        edge = Edge(start_node.scenePos())
+                        edge.set_start_node(start_node)
+                        edge.set_end_node(end_node)
+                        edge.set_title(edge_data['title'])
+                        edge.waypoint_ratio = edge_data['waypoint_ratio']
+                        
+                        # Add to scene
+                        self.scene.addItem(edge)
+                        edge.create_control_points(self.scene)
+                        
+                        # Restore connection offsets
+                        if edge.start_control:
+                            edge.start_control.offset = edge_data['start_offset']
+                            edge.start_control.update_position()  # Update control point position
+                        if edge.end_control:
+                            edge.end_control.offset = edge_data['end_offset']
+                            edge.end_control.update_position()  # Update control point position
+                        
+                        # Update path to reflect the restored offsets
+                        edge.update_path()
+                        
+                        # Add to edges list
+                        if not hasattr(self.scene, 'edges'):
+                            self.scene.edges = []
+                        self.scene.edges.append(edge)
+            
+            self.statusBar().showMessage(f"Undone: Node '{node_data['title']}' and {len(action.get('connected_edges', []))} edge(s) restored", 2000)
+        
+        elif action_type == 'node_type_change':
+            # Undo node type change
+            node = action['node']
+            old_type = action['old_type']
+            old_title = action['old_title']
+            
+            if node.scene() == self.scene:
+                # Restore the old type
+                node.set_node_type(old_type)
+                # Restore the original title (set_node_type may have changed it)
+                node.title = old_title
+                node.title_item.setPlainText(old_title)
+                type_name = old_type if old_type else "None"
+                self.statusBar().showMessage(f"Undone: Node type restored to {type_name}", 2000)
+            else:
+                self.statusBar().showMessage("Cannot undo: Node no longer exists", 2000)
+                return
+        
+        elif action_type == 'node_resize':
+            # Undo node resize
+            node = action['node']
+            old_rect = action['old_rect']
+            
+            if node.scene() == self.scene:
+                # Restore the old rect
+                node.prepareGeometryChange()
+                node.rect = old_rect
+                if hasattr(node, 'update_handles'):
+                    node.update_handles()
+                node.update()
+                self.statusBar().showMessage(f"Undone: Node '{node.title}' resized back", 2000)
+            else:
+                self.statusBar().showMessage("Cannot undo: Node no longer exists", 2000)
+                return
+        
+        elif action_type == 'edge_create':
+            # Undo edge creation by deleting the edge
+            from edge import Edge
+            edge = action['edge']
+            if edge.scene() == self.scene:
+                # Remove from scene's edges list
+                if hasattr(self.scene, 'edges') and edge in self.scene.edges:
+                    self.scene.edges.remove(edge)
+                # Remove control points and edge from scene
+                if edge.start_control and edge.start_control.scene():
+                    self.scene.removeItem(edge.start_control)
+                if edge.end_control and edge.end_control.scene():
+                    self.scene.removeItem(edge.end_control)
+                if edge.waypoint_control and edge.waypoint_control.scene():
+                    self.scene.removeItem(edge.waypoint_control)
+                if edge.title_item and edge.title_item.scene():
+                    self.scene.removeItem(edge.title_item)
+                self.scene.removeItem(edge)
+                self.statusBar().showMessage(f"Undone: Edge creation deleted", 2000)
+            else:
+                self.statusBar().showMessage("Cannot undo: Edge already deleted", 2000)
+                return
+        
+        elif action_type == 'edge_delete':
+            # Undo edge deletion by recreating the edge
+            from edge import Edge
+            edge_data = action['edge_data']
+            
+            if edge_data['start_node'] and edge_data['end_node']:
+                # Create new edge
+                edge = Edge(edge_data['start_node'].scenePos())
+                edge.set_start_node(edge_data['start_node'])
+                edge.set_end_node(edge_data['end_node'])
+                edge.set_title(edge_data['title'])
+                # Ensure waypoint_ratio has a default value if None
+                edge.waypoint_ratio = edge_data['waypoint_ratio'] if edge_data['waypoint_ratio'] is not None else 0.5
+                
+                # Add to scene
+                self.scene.addItem(edge)
+                edge.create_control_points(self.scene)
+                
+                # Restore connection offsets
+                if edge.start_control:
+                    edge.start_control.offset = edge_data['start_offset']
+                if edge.end_control:
+                    edge.end_control.offset = edge_data['end_offset']
+                
+                # Update path
+                edge.update_path()
+                
+                # Add to edges list
+                if not hasattr(self.scene, 'edges'):
+                    self.scene.edges = []
+                self.scene.edges.append(edge)
+                
+                self.statusBar().showMessage(f"Undone: Edge '{edge_data['title']}' restored", 2000)
+            else:
+                self.statusBar().showMessage("Cannot undo: Connected nodes no longer exist", 2000)
+                return
+        
+        elif action_type == 'edge_connection_change':
+            # Undo edge connection point change
+            edge = action['edge']
+            is_start = action['is_start']
+            old_offset = action['old_offset']
+            
+            if edge.scene() == self.scene:
+                # Restore the old offset
+                if is_start and edge.start_control:
+                    edge.start_control.offset = old_offset
+                    edge.start_control.update_position()
+                elif not is_start and edge.end_control:
+                    edge.end_control.offset = old_offset
+                    edge.end_control.update_position()
+                
+                # Update the edge path
+                edge.update_path()
+                
+                point_name = "start" if is_start else "end"
+                self.statusBar().showMessage(f"Undone: Edge {point_name} connection point restored", 2000)
+            else:
+                self.statusBar().showMessage("Cannot undo: Edge no longer exists", 2000)
+                return
+        
+        elif action_type == 'edge_waypoint_change':
+            # Undo edge waypoint adjustment
+            edge = action['edge']
+            old_ratio = action['old_ratio']
+            
+            if edge.scene() == self.scene:
+                # Restore the old waypoint ratio (use default if None)
+                edge.waypoint_ratio = old_ratio if old_ratio is not None else 0.5
+                
+                # Update the edge path
+                edge.update_path()
+                
+                self.statusBar().showMessage(f"Undone: Edge waypoint adjusted back", 2000)
+            else:
+                self.statusBar().showMessage("Cannot undo: Edge no longer exists", 2000)
+                return
+        
+        elif action_type == 'node_title_change':
+            # Undo node title change
+            node = action['node']
+            old_title = action['old_title']
+            
+            if node.scene() == self.scene:
+                # Restore the old title
+                node.title = old_title
+                node.title_item.setPlainText(old_title)
+                node.update()
+                self.statusBar().showMessage(f"Undone: Node title restored to '{old_title}'", 2000)
+            else:
+                self.statusBar().showMessage("Cannot undo: Node no longer exists", 2000)
+                return
+        
+        elif action_type == 'edge_title_change':
+            # Undo edge title change
+            edge = action['edge']
+            old_title = action['old_title']
+            
+            if edge.scene() == self.scene:
+                # Restore the old title
+                edge.set_title(old_title)
+                self.statusBar().showMessage(f"Undone: Edge title restored to '{old_title}'", 2000)
+            else:
+                self.statusBar().showMessage("Cannot undo: Edge no longer exists", 2000)
+                return
+        
+        # Signal the undo action
+        if hasattr(self, 'action_monitor'):
+            # Add undo action type if not already present
+            if 'undo' not in self.action_monitor.actions:
+                self.action_monitor.add_action_type('undo', QColor("#9B59B6"), 300)  # Purple
+            self.action_monitor.signal_action('undo')
+    
     def delete_selected_items(self):
         """Delete all selected items (nodes and edges)"""
         from edge import Edge
@@ -1160,7 +1901,7 @@ class NodeEditorWindow(QMainWindow):
             if isinstance(item, Edge):
                 item.delete_edge()
             elif isinstance(item, Node):
-                self.view.delete_node(item)
+                self.delete_node(item)
     
     def new_design(self):
         """Clear the current design and start fresh"""
@@ -1334,6 +2075,9 @@ class NodeEditorWindow(QMainWindow):
                 pos = QPointF(node_data['pos']['x'], node_data['pos']['y'])
                 node = Node(node_data['title'], pos)
                 
+                # Set the action monitor reference
+                node.action_monitor = self.action_monitor
+                
                 # Restore rect
                 rect_data = node_data['rect']
                 node.rect = QRectF(
@@ -1404,38 +2148,27 @@ class NodeEditorWindow(QMainWindow):
                     edge = Edge(start_node.scenePos())
                     edge.set_start_node(start_node)
                     edge.set_end_node(end_node)
-                    
-                    # Restore waypoint ratio
-                    if 'waypoint_ratio' in edge_data:
-                        edge.waypoint_ratio = edge_data['waypoint_ratio']
-                    
-                    # Restore control point offsets
-                    if edge_data.get('start_offset'):
-                        offset_data = edge_data['start_offset']
-                        edge.start_offset = QPointF(offset_data['x'], offset_data['y'])
-                    
-                    if edge_data.get('end_offset'):
-                        offset_data = edge_data['end_offset']
-                        edge.end_offset = QPointF(offset_data['x'], offset_data['y'])
+                    edge.set_title(edge_data['title'])
+                    # Ensure waypoint_ratio has a default value if None
+                    edge.waypoint_ratio = edge_data['waypoint_ratio'] if edge_data['waypoint_ratio'] is not None else 0.5
                     
                     # Add to scene
                     self.scene.addItem(edge)
-                    
-                    # Add to edges list (prefer scene.edges)
-                    if hasattr(self.scene, 'edges'):
-                        self.scene.edges.append(edge)
-                    elif hasattr(self, 'edges'):
-                        self.edges.append(edge)
-                    
-                    # Create control points
                     edge.create_control_points(self.scene)
                     
-                    # Restore title
-                    if edge_data.get('title'):
-                        edge.set_title(edge_data['title'])
+                    # Restore connection offsets
+                    if edge.start_control:
+                        edge.start_control.offset = edge_data['start_offset']
+                    if edge.end_control:
+                        edge.end_control.offset = edge_data['end_offset']
                     
                     # Update path
                     edge.update_path()
+                    
+                    # Add to edges list
+                    if not hasattr(self.scene, 'edges'):
+                        self.scene.edges = []
+                    self.scene.edges.append(edge)
             
             self.statusBar().showMessage(f"Design loaded from {file_path}")
             QMessageBox.information(self, "Success", "Design loaded successfully!")
@@ -1581,6 +2314,26 @@ class NodeEditorWindow(QMainWindow):
         painter.end()
         return QIcon(pm)
     
+    def make_undo_svg_icon(self, size=24) -> QIcon:
+        """Create an undo icon with a curved arrow pointing left."""
+        svg = f"""
+        <svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none"
+             xmlns="http://www.w3.org/2000/svg">
+          <path d="M9 14 L4 9 L9 4" stroke="#3498db" stroke-width="2.5" 
+                stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M4 9 L13 9 C16.866 9 20 12.134 20 16 C20 16.552 19.552 17 19 17" 
+                stroke="#3498db" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        </svg>
+        """
+        renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        painter = QPainter(pm)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        renderer.render(painter)
+        painter.end()
+        return QIcon(pm)
+    
     def zoomIn(self):
         self.view.scale(self.view.zoom_in_factor, self.view.zoom_in_factor)
         self.view.zoom_level += self.view.zoom_step
@@ -1634,6 +2387,9 @@ class NodeEditorWindow(QMainWindow):
         """Add a new node at the specified position"""
         node = Node(f"Node {len(self.nodes) + 1}", pos, parent)
         
+        # Set the action monitor reference
+        node.action_monitor = self.action_monitor
+        
         if parent and isinstance(parent, Node):
             # If parent is provided, add as child
             parent.add_child_node(node)
@@ -1646,28 +2402,36 @@ class NodeEditorWindow(QMainWindow):
         for item in self.scene.selectedItems():
             item.setSelected(False)
         node.setSelected(True)
+        
+        # Record node creation for undo
+        self.record_node_creation(node, parent)
             
         return node
     
-    def delete_node(self, node):
+    def delete_node(self, node, record_for_undo=True):
         """Delete a node and all its children"""
         if not node:
             return
-            
-        # Recursively delete all child nodes
-        for child in node.child_nodes[:]:  # Create a copy of the list to iterate over
-            self.delete_node(child)
         
-        # Remove all edges connected to this node
+        # Record node deletion for undo (before actually deleting)
+        # Only record if this is a top-level deletion (not a recursive child deletion)
+        if record_for_undo:
+            self.record_node_deletion(node)
+            
+        # Delete all edges connected to this node FIRST (before deleting the node)
         edges_to_remove = []
-        for edge in self.edges[:]:
-            if edge.source == node or edge.target == node:
-                edges_to_remove.append(edge)
+        if hasattr(self.scene, 'edges') and self.scene.edges:
+            for edge in self.scene.edges[:]:
+                if edge._start_node == node or edge._end_node == node:
+                    edges_to_remove.append(edge)
         
         for edge in edges_to_remove:
-            self.scene.removeItem(edge)
-            if edge in self.edges:
-                self.edges.remove(edge)
+            # Delete edge but don't record for undo - edges are recorded with the node
+            edge.delete_edge(record_for_undo=False)
+        
+        # Recursively delete all child nodes (without recording them for undo)
+        for child in node.child_nodes[:]:  # Create a copy of the list to iterate over
+            self.delete_node(child, record_for_undo=False)
         
         # Remove from parent's child list if it has a parent
         if node.parent_node and node in node.parent_node.child_nodes:
@@ -1680,3 +2444,54 @@ class NodeEditorWindow(QMainWindow):
         
         # Don't update the parent node's size when deleting a child
     # This prevents unwanted resizing of parent nodes
+
+    def validate_undo_action(self, action):
+        """Validate that an undo action can still be performed"""
+        action_type = action['type']
+        
+        if action_type == 'node_move':
+            # Check if node still exists in scene
+            node = action['node']
+            return node.scene() == self.scene
+            
+        elif action_type == 'node_create':
+            # For create undo (which means delete), node must exist
+            node = action['node']
+            parent = action['parent']
+            if node.scene() != self.scene:
+                return False
+            if parent and node not in parent.child_nodes:
+                return False
+            return True
+            
+        elif action_type == 'node_delete':
+            # For delete undo (which means recreate), node must NOT exist
+            node_data = action['node_data']
+            
+            # Helper to check if node exists by ID
+            def node_exists(node_id):
+                for n in self.nodes:
+                    if id(n) == node_id:
+                        return True
+                    # Check child nodes recursively
+                    def check_children(parent):
+                        for child in parent.child_nodes:
+                            if id(child) == node_id:
+                                return True
+                            result = check_children(child)
+                            if result:
+                                return result
+                        return False
+                    result = check_children(n)
+                    if result:
+                        return True
+                return False
+            
+            return not node_exists(node_data['node_id'])
+            
+        elif action_type == 'node_type_change':
+            # Node must exist
+            node = action['node']
+            return node.scene() == self.scene
+            
+        return True  # Default to True for unknown action types

@@ -12,6 +12,7 @@ class EdgeControlPoint(QGraphicsEllipseItem):
         self.edge = edge
         self.node = node
         self.is_start = is_start
+        self.is_dragging = False
         
         # Offset from node center (in node's local coordinates)
         self.offset = QPointF(0, 0)
@@ -40,6 +41,31 @@ class EdgeControlPoint(QGraphicsEllipseItem):
         # Get the border intersection point
         border_pos = self.edge.get_connection_point(self.is_start)
         self.setPos(border_pos)
+    
+    def mousePressEvent(self, event):
+        """Handle mouse press - start dragging"""
+        if event.button() == Qt.LeftButton:
+            self.is_dragging = True
+            self.offset_before_drag = QPointF(self.offset)
+        super().mousePressEvent(event)
+    
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release - end dragging and record undo"""
+        if event.button() == Qt.LeftButton and self.is_dragging:
+            self.is_dragging = False
+            # Record the change only once when dragging is complete
+            if hasattr(self, 'offset_before_drag') and self.offset_before_drag != self.offset:
+                scene = self.scene()
+                if scene and hasattr(scene, 'views') and scene.views():
+                    view = scene.views()[0]
+                    main_window = None
+                    if hasattr(view, 'window'):
+                        main_window = view.window()
+                    if main_window and hasattr(main_window, 'record_edge_connection_change'):
+                        main_window.record_edge_connection_change(
+                            self.edge, self.is_start, self.offset_before_drag, self.offset
+                        )
+        super().mouseReleaseEvent(event)
     
     def hoverEnterEvent(self, event):
         """Handle hover enter"""
@@ -119,7 +145,16 @@ class EdgeTitleItem(QGraphicsTextItem):
     def focusOutEvent(self, event):
         # Commit changes on focus out
         self.setTextInteractionFlags(Qt.NoTextInteraction)
-        self.edge.set_title(self.toPlainText())
+        new_title = self.toPlainText()
+        
+        # Record the title change for undo if it actually changed
+        if new_title != self._orig_text:
+            if self.edge.scene() and self.edge.scene().views():
+                view = self.edge.scene().views()[0]
+                if hasattr(view, 'window') and hasattr(view.window(), 'record_edge_title_change'):
+                    view.window().record_edge_title_change(self.edge, self._orig_text, new_title)
+        
+        self.edge.set_title(new_title)
         super().focusOutEvent(event)
 
     def mousePressEvent(self, event):
@@ -149,6 +184,7 @@ class WaypointControlPoint(QGraphicsEllipseItem):
         super().__init__(-5, -5, 10, 10, parent)  # 10x10 circle
         
         self.edge = edge
+        self.is_dragging = False
         
         # Colors
         self.normal_color = QColor(255, 150, 100)  # Orange
@@ -165,6 +201,31 @@ class WaypointControlPoint(QGraphicsEllipseItem):
         self.setAcceptHoverEvents(True)
         
         self.setZValue(2000)  # Draw above everything, including selected nodes (which use 1000)
+    
+    def mousePressEvent(self, event):
+        """Handle mouse press - start dragging"""
+        if event.button() == Qt.LeftButton:
+            self.is_dragging = True
+            self.ratio_before_drag = self.edge.waypoint_ratio
+        super().mousePressEvent(event)
+    
+    def mouseReleaseEvent(self, event):
+        """Handle mouse release - end dragging and record undo"""
+        if event.button() == Qt.LeftButton and self.is_dragging:
+            self.is_dragging = False
+            # Record the change only once when dragging is complete
+            if hasattr(self, 'ratio_before_drag') and self.ratio_before_drag != self.edge.waypoint_ratio:
+                scene = self.scene()
+                if scene and hasattr(scene, 'views') and scene.views():
+                    view = scene.views()[0]
+                    main_window = None
+                    if hasattr(view, 'window'):
+                        main_window = view.window()
+                    if main_window and hasattr(main_window, 'record_edge_waypoint_change'):
+                        main_window.record_edge_waypoint_change(
+                            self.edge, self.ratio_before_drag, self.edge.waypoint_ratio
+                        )
+        super().mouseReleaseEvent(event)
     
     def hoverEnterEvent(self, event):
         """Handle hover enter"""
@@ -191,6 +252,10 @@ class WaypointControlPoint(QGraphicsEllipseItem):
     def itemChange(self, change, value):
         """Handle item changes"""
         if change == QGraphicsItem.ItemPositionChange:
+            # Capture waypoint ratio before movement for undo
+            if not hasattr(self, 'ratio_before_move'):
+                self.ratio_before_move = self.edge.waypoint_ratio
+            
             # Constrain movement to only horizontal (X-axis)
             new_pos = value
             # Keep the Y position fixed, only allow X to change
@@ -525,8 +590,20 @@ class Edge(QGraphicsPathItem):
         # No keyboard deletion - use toolbar button instead
         super().keyPressEvent(event)
     
-    def delete_edge(self):
+    def delete_edge(self, record_for_undo=True):
         """Delete this edge and clean up"""
+        # Record edge deletion for undo (before actually deleting)
+        # Only record if this is an independent edge deletion (not part of node deletion)
+        if record_for_undo:
+            scene = self.scene()
+            if scene and hasattr(scene, 'views') and scene.views():
+                view = scene.views()[0]
+                main_window = None
+                if hasattr(view, 'window'):
+                    main_window = view.window()
+                if main_window and hasattr(main_window, 'record_edge_deletion'):
+                    main_window.record_edge_deletion(self)
+        
         # Remove from connected nodes
         if self._start_node and hasattr(self._start_node, 'connected_edges'):
             if self in self._start_node.connected_edges:
