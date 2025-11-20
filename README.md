@@ -39,6 +39,21 @@ A PyQt5-based node editor application with orthogonal edge routing and interacti
   - All edges with connection points and waypoints
   - Edge titles
 
+### Undo/Redo
+- **Full undo/redo support** for all operations (Ctrl+Z / Ctrl+Y)
+- Supports undoing/redoing:
+  - Node movements (captures full drag distance)
+  - Node creation and deletion
+  - Node type changes
+  - Node resizing
+  - Initial state marking
+  - Edge creation and deletion
+  - Edge connection point adjustments
+  - Edge waypoint adjustments
+  - Node and edge title changes
+- Undo stack size: 50 actions
+- Redo stack automatically managed
+
 ### UI Features
 - Zoom in/out with mouse wheel
 - Pan around the canvas
@@ -84,6 +99,11 @@ python main.py
 - **Ctrl+S**: Save design to JSON file
 - **Ctrl+O**: Load design from JSON file
 - **Ctrl+Q**: Exit application
+
+#### Undo/Redo
+- **Ctrl+Z**: Undo last action
+- **Ctrl+Y**: Redo last undone action
+- **Toolbar buttons**: Undo and Redo buttons available in toolbar
 
 #### View Controls
 - **Mouse Wheel**: Zoom in/out

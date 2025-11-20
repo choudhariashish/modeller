@@ -1176,6 +1176,7 @@ class Node(QGraphicsItem):
 class NodeEditorWindow(QMainWindow):
     def __init__(self):
         super().__init__()
+        self.current_file = None  # Track the currently opened file
         self.initUI()
 
     def _relink_stored_edge_nodes(self, original_node_id, new_node):
@@ -1210,6 +1211,27 @@ class NodeEditorWindow(QMainWindow):
         # Create toolbar
         toolbar = self.addToolBar("Main Toolbar")
         toolbar.setMovable(False)
+        
+        # Add file operation buttons at the left
+        new_action = toolbar.addAction("New")
+        new_action.setToolTip("New design (Ctrl+N)")
+        new_action.setIcon(self.make_new_file_svg_icon(24))
+        new_action.triggered.connect(self.new_design)
+        new_action.setShortcut("Ctrl+N")
+        
+        save_action = toolbar.addAction("Save")
+        save_action.setToolTip("Save design (Ctrl+S)")
+        save_action.setIcon(self.make_save_svg_icon(24))
+        save_action.triggered.connect(self.save_design)
+        save_action.setShortcut("Ctrl+S")
+        
+        load_action = toolbar.addAction("Load")
+        load_action.setToolTip("Load design (Ctrl+O)")
+        load_action.setIcon(self.make_load_svg_icon(24))
+        load_action.triggered.connect(self.load_design)
+        load_action.setShortcut("Ctrl+O")
+        
+        toolbar.addSeparator()
         
         # Add an expanding spacer before actions to center the group
         left_spacer = QWidget()
@@ -2249,6 +2271,16 @@ class NodeEditorWindow(QMainWindow):
         if hasattr(self, 'edges'):
             self.edges.clear()
         
+        # Clear undo/redo stacks
+        if hasattr(self, 'undo_stack'):
+            self.undo_stack.clear()
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
+        
+        # Clear current file and update window title
+        self.current_file = None
+        self.update_window_title()
+        
         # Update status bar
         self.statusBar().showMessage("New design created")
     
@@ -2345,6 +2377,10 @@ class NodeEditorWindow(QMainWindow):
                 f.truncate(0)  # Explicitly clear file content
                 json.dump(design_data, f, indent=2)
                 f.flush()  # Ensure data is written to disk
+            
+            # Update current file and window title
+            self.current_file = file_path
+            self.update_window_title()
             
             self.statusBar().showMessage(f"Design saved to {file_path}")
             QMessageBox.information(self, "Success", "Design saved successfully!")
@@ -2495,6 +2531,16 @@ class NodeEditorWindow(QMainWindow):
                     if not hasattr(self.scene, 'edges'):
                         self.scene.edges = []
                     self.scene.edges.append(edge)
+            
+            # Clear undo/redo stacks for the new design
+            if hasattr(self, 'undo_stack'):
+                self.undo_stack.clear()
+            if hasattr(self, 'redo_stack'):
+                self.redo_stack.clear()
+            
+            # Update current file and window title
+            self.current_file = file_path
+            self.update_window_title()
             
             self.statusBar().showMessage(f"Design loaded from {file_path}")
             QMessageBox.information(self, "Success", "Design loaded successfully!")
@@ -2680,6 +2726,70 @@ class NodeEditorWindow(QMainWindow):
         painter.end()
         return QIcon(pm)
     
+    def make_new_file_svg_icon(self, size=24) -> QIcon:
+        """Create a new file icon."""
+        svg = f"""
+        <svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none"
+             xmlns="http://www.w3.org/2000/svg">
+          <path d="M14 2 L14 8 L20 8" stroke="#3498db" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M14 2 L6 2 C4.895 2 4 2.895 4 4 L4 20 C4 21.105 4.895 22 6 22 L18 22 C19.105 22 20 21.105 20 20 L20 8 L14 2 Z"
+                stroke="#3498db" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M9 12 L15 12 M12 9 L12 15" stroke="#3498db" stroke-width="2"
+                stroke-linecap="round" fill="none"/>
+        </svg>
+        """
+        renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        painter = QPainter(pm)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        renderer.render(painter)
+        painter.end()
+        return QIcon(pm)
+    
+    def make_save_svg_icon(self, size=24) -> QIcon:
+        """Create a save/floppy disk icon."""
+        svg = f"""
+        <svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none"
+             xmlns="http://www.w3.org/2000/svg">
+          <path d="M19 21 L5 21 C3.895 21 3 20.105 3 19 L3 5 C3 3.895 3.895 3 5 3 L16 3 L21 8 L21 19 C21 20.105 20.105 21 19 21 Z"
+                stroke="#3498db" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M7 3 L7 8 L15 8 L15 3" stroke="#3498db" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <rect x="7" y="13" width="10" height="5" stroke="#3498db" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+        """
+        renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        painter = QPainter(pm)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        renderer.render(painter)
+        painter.end()
+        return QIcon(pm)
+    
+    def make_load_svg_icon(self, size=24) -> QIcon:
+        """Create a load/open folder icon."""
+        svg = f"""
+        <svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none"
+             xmlns="http://www.w3.org/2000/svg">
+          <path d="M22 19 C22 20.105 21.105 21 20 21 L4 21 C2.895 21 2 20.105 2 19 L2 5 C2 3.895 2.895 3 4 3 L9 3 L11 6 L20 6 C21.105 6 22 6.895 22 8 L22 19 Z"
+                stroke="#3498db" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M12 11 L12 17 M9 14 L12 11 L15 14" stroke="#3498db" stroke-width="2"
+                stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+        </svg>
+        """
+        renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        painter = QPainter(pm)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        renderer.render(painter)
+        painter.end()
+        return QIcon(pm)
+    
     def zoomIn(self):
         self.view.scale(self.view.zoom_in_factor, self.view.zoom_in_factor)
         self.view.zoom_level += self.view.zoom_step
@@ -2693,6 +2803,15 @@ class NodeEditorWindow(QMainWindow):
         # Reset the view's transformation matrix
         self.view.resetTransform()
         self.view.zoom_level = 0
+    
+    def update_window_title(self):
+        """Update the window title to show the current file name"""
+        if self.current_file:
+            import os
+            filename = os.path.basename(self.current_file)
+            self.setWindowTitle(f"The Modeller - {filename}")
+        else:
+            self.setWindowTitle("The Modeller")
         
     def show_context_menu(self, pos):
         """Show the context menu for nodes"""
