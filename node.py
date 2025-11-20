@@ -1173,6 +1173,30 @@ class NodeEditorWindow(QMainWindow):
     def __init__(self):
         super().__init__()
         self.initUI()
+
+    def _relink_stored_edge_nodes(self, original_node_id, new_node):
+        """Update pending edge actions to reference the recreated node."""
+        stacks = [self.undo_stack]
+        if hasattr(self, 'redo_stack'):
+            stacks.append(self.redo_stack)
+
+        for stack in stacks:
+            if not stack:
+                continue
+            for action in stack:
+                if not isinstance(action, dict):
+                    continue
+                if action.get('type') != 'edge_delete':
+                    continue
+                edge_data = action.get('edge_data')
+                if not edge_data:
+                    continue
+                if edge_data.get('start_node_id') == original_node_id:
+                    edge_data['start_node'] = new_node
+                    edge_data['start_node_id'] = id(new_node)
+                if edge_data.get('end_node_id') == original_node_id:
+                    edge_data['end_node'] = new_node
+                    edge_data['end_node_id'] = id(new_node)
     
     def initUI(self):
         # Set window properties
@@ -1337,8 +1361,12 @@ class NodeEditorWindow(QMainWindow):
         for node in nodes:
             # Toggle initial state for State nodes
             if node.node_type == "State":
+                previous_state = node.is_initial
+                new_state = not previous_state
+                # Record before changing so undo can revert
+                self.record_node_initial_change(node, previous_state, new_state)
                 # Toggle the initial state
-                node.set_initial_state(not node.is_initial)
+                node.set_initial_state(new_state)
                 marked_count += 1
             else:
                 non_state_count += 1
@@ -1380,22 +1408,6 @@ class NodeEditorWindow(QMainWindow):
     
     def record_node_deletion(self, node):
         """Record a node deletion for undo functionality"""
-        # Capture all edges connected to this node
-        connected_edges = []
-        if hasattr(self.scene, 'edges') and self.scene.edges:
-            for edge in self.scene.edges:
-                if edge._start_node == node or edge._end_node == node:
-                    # Capture edge data using node IDs instead of references
-                    edge_data = {
-                        'start_node_id': id(edge._start_node),
-                        'end_node_id': id(edge._end_node),
-                        'title': edge.title_item.toPlainText() if edge.title_item else "",
-                        'waypoint_ratio': edge.waypoint_ratio if edge.waypoint_ratio is not None else 0.5,
-                        'start_offset': QPointF(edge.start_control.offset) if edge.start_control else QPointF(0, 0),
-                        'end_offset': QPointF(edge.end_control.offset) if edge.end_control else QPointF(0, 0)
-                    }
-                    connected_edges.append(edge_data)
-        
         # Capture node state before deletion
         self.undo_stack.append({
             'type': 'node_delete',
@@ -1406,9 +1418,8 @@ class NodeEditorWindow(QMainWindow):
                 'is_initial': node.is_initial,
                 'rect': QRectF(node.rect) if hasattr(node, 'rect') else None,
                 'parent': node.parent_node,
-                'node_id': id(node)  # Store the node's ID for edge reconnection
-            },
-            'connected_edges': connected_edges  # Store connected edges with the node
+                'node_id': id(node)
+            }
         })
         
         # Limit stack size
@@ -1463,10 +1474,12 @@ class NodeEditorWindow(QMainWindow):
             'edge_data': {
                 'start_node': edge._start_node,
                 'end_node': edge._end_node,
+                'start_node_id': id(edge._start_node) if edge._start_node else None,
+                'end_node_id': id(edge._end_node) if edge._end_node else None,
                 'title': edge.title_item.toPlainText() if edge.title_item else "",
-                'waypoint_ratio': edge.waypoint_ratio,
-                'start_offset': QPointF(edge.start_control.offset) if edge.start_control else QPointF(0, 0),
-                'end_offset': QPointF(edge.end_control.offset) if edge.end_control else QPointF(0, 0)
+                'waypoint_ratio': edge.waypoint_ratio if edge.waypoint_ratio is not None else 0.5,
+                'start_offset': edge.get_endpoint_offset(is_start=True),
+                'end_offset': edge.get_endpoint_offset(is_start=False)
             }
         })
         
@@ -1524,6 +1537,17 @@ class NodeEditorWindow(QMainWindow):
         })
         
         # Limit stack size
+        if len(self.undo_stack) > self.max_undo_stack_size:
+            self.undo_stack.pop(0)
+
+    def record_node_initial_change(self, node, was_initial, is_initial):
+        """Record toggling of a node's initial state."""
+        self.undo_stack.append({
+            'type': 'node_initial_change',
+            'node': node,
+            'was_initial': was_initial,
+            'is_initial': is_initial
+        })
         if len(self.undo_stack) > self.max_undo_stack_size:
             self.undo_stack.pop(0)
     
@@ -1643,7 +1667,10 @@ class NodeEditorWindow(QMainWindow):
                 self.nodes.append(node)
                 # For top-level nodes, set position directly
                 node.setPos(node_data['position'])
-            
+
+            # Update any stored edge deletion records to reference this new node instance
+            self._relink_stored_edge_nodes(node_data['node_id'], node)
+
             # Create a mapping from old node ID to the restored node
             node_id_mapping = {node_data['node_id']: node}
             
@@ -1755,6 +1782,18 @@ class NodeEditorWindow(QMainWindow):
                 self.statusBar().showMessage("Cannot undo: Node no longer exists", 2000)
                 return
         
+        elif action_type == 'node_initial_change':
+            node = action['node']
+            was_initial = action['was_initial']
+            if node.scene() == self.scene and node.node_type == "State":
+                node.set_initial_state(was_initial)
+                state_text = "initial" if was_initial else "non-initial"
+                self.statusBar().showMessage(f"Undone: Node marked as {state_text}", 2000)
+            else:
+                self.statusBar().showMessage("Cannot undo: Node no longer exists", 2000)
+                return
+
+        
         elif action_type == 'edge_create':
             # Undo edge creation by deleting the edge
             from edge import Edge
@@ -1782,12 +1821,39 @@ class NodeEditorWindow(QMainWindow):
             # Undo edge deletion by recreating the edge
             from edge import Edge
             edge_data = action['edge_data']
+
+            def find_node_by_id(target_id):
+                if target_id is None:
+                    return None
+                for n in self.nodes:
+                    if id(n) == target_id:
+                        return n
+                    def check_children(parent):
+                        for child in parent.child_nodes:
+                            if id(child) == target_id:
+                                return child
+                            result = check_children(child)
+                            if result:
+                                return result
+                        return None
+                    result = check_children(n)
+                    if result:
+                        return result
+                return None
+
+            start_node = edge_data.get('start_node')
+            end_node = edge_data.get('end_node')
+
+            if (not start_node or start_node.scene() != self.scene) and edge_data.get('start_node_id'):
+                start_node = find_node_by_id(edge_data['start_node_id'])
+            if (not end_node or end_node.scene() != self.scene) and edge_data.get('end_node_id'):
+                end_node = find_node_by_id(edge_data['end_node_id'])
             
-            if edge_data['start_node'] and edge_data['end_node']:
+            if start_node and end_node:
                 # Create new edge
-                edge = Edge(edge_data['start_node'].scenePos())
-                edge.set_start_node(edge_data['start_node'])
-                edge.set_end_node(edge_data['end_node'])
+                edge = Edge(start_node.scenePos())
+                edge.set_start_node(start_node)
+                edge.set_end_node(end_node)
                 edge.set_title(edge_data['title'])
                 # Ensure waypoint_ratio has a default value if None
                 edge.waypoint_ratio = edge_data['waypoint_ratio'] if edge_data['waypoint_ratio'] is not None else 0.5
@@ -1796,14 +1862,10 @@ class NodeEditorWindow(QMainWindow):
                 self.scene.addItem(edge)
                 edge.create_control_points(self.scene)
                 
-                # Restore connection offsets
-                if edge.start_control:
-                    edge.start_control.offset = edge_data['start_offset']
-                if edge.end_control:
-                    edge.end_control.offset = edge_data['end_offset']
-                
-                # Update path
-                edge.update_path()
+                # Restore/snap connection offsets to node boundaries
+                saved_start = QPointF(edge_data['start_offset']) if 'start_offset' in edge_data else None
+                saved_end = QPointF(edge_data['end_offset']) if 'end_offset' in edge_data else None
+                edge.snap_endpoints_to_nodes(saved_start=saved_start, saved_end=saved_end)
                 
                 # Add to edges list
                 if not hasattr(self.scene, 'edges'):
@@ -2158,9 +2220,19 @@ class NodeEditorWindow(QMainWindow):
                     
                     # Restore connection offsets
                     if edge.start_control:
-                        edge.start_control.offset = edge_data['start_offset']
+                        start_offset = edge_data.get('start_offset')
+                        if isinstance(start_offset, dict):
+                            start_offset = QPointF(start_offset.get('x', 0), start_offset.get('y', 0))
+                        if isinstance(start_offset, QPointF):
+                            edge.start_control.offset = QPointF(start_offset)
+                            edge.start_offset = QPointF(start_offset)
                     if edge.end_control:
-                        edge.end_control.offset = edge_data['end_offset']
+                        end_offset = edge_data.get('end_offset')
+                        if isinstance(end_offset, dict):
+                            end_offset = QPointF(end_offset.get('x', 0), end_offset.get('y', 0))
+                        if isinstance(end_offset, QPointF):
+                            edge.end_control.offset = QPointF(end_offset)
+                            edge.end_offset = QPointF(end_offset)
                     
                     # Update path
                     edge.update_path()
@@ -2409,41 +2481,42 @@ class NodeEditorWindow(QMainWindow):
         return node
     
     def delete_node(self, node, record_for_undo=True):
-        """Delete a node and all its children"""
+        """Delete a node and all its children, removing connected edges first."""
         if not node:
-            return
-        
+            return False
+
+        # Collect edges connected to this node
+        connected_edges = []
+        if hasattr(self.scene, 'edges') and self.scene.edges:
+            connected_edges = [edge for edge in self.scene.edges
+                               if edge._start_node == node or edge._end_node == node]
+
+        # Delete connected edges first so undo can restore them individually
+        for edge in connected_edges:
+            edge.delete_edge(record_for_undo=record_for_undo)
+
         # Record node deletion for undo (before actually deleting)
         # Only record if this is a top-level deletion (not a recursive child deletion)
         if record_for_undo:
             self.record_node_deletion(node)
-            
-        # Delete all edges connected to this node FIRST (before deleting the node)
-        edges_to_remove = []
-        if hasattr(self.scene, 'edges') and self.scene.edges:
-            for edge in self.scene.edges[:]:
-                if edge._start_node == node or edge._end_node == node:
-                    edges_to_remove.append(edge)
-        
-        for edge in edges_to_remove:
-            # Delete edge but don't record for undo - edges are recorded with the node
-            edge.delete_edge(record_for_undo=False)
-        
+
         # Recursively delete all child nodes (without recording them for undo)
         for child in node.child_nodes[:]:  # Create a copy of the list to iterate over
-            self.delete_node(child, record_for_undo=False)
-        
+            if not self.delete_node(child, record_for_undo=False):
+                return False
+
         # Remove from parent's child list if it has a parent
         if node.parent_node and node in node.parent_node.child_nodes:
             node.parent_node.child_nodes.remove(node)
-        
+
         # Remove from the scene and nodes list
         self.scene.removeItem(node)
         if node in self.nodes:
             self.nodes.remove(node)
-        
+
         # Don't update the parent node's size when deleting a child
-    # This prevents unwanted resizing of parent nodes
+        # This prevents unwanted resizing of parent nodes
+        return True
 
     def validate_undo_action(self, action):
         """Validate that an undo action can still be performed"""

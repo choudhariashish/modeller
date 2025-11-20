@@ -372,10 +372,14 @@ class Edge(QGraphicsPathItem):
         # Only create if they don't already exist
         if self.start_control is None:
             self.start_control = EdgeControlPoint(self, self._start_node, is_start=True)
+            if self.start_offset is not None:
+                self.start_control.offset = QPointF(self.start_offset)
             scene.addItem(self.start_control)
         
         if self.end_control is None:
             self.end_control = EdgeControlPoint(self, self._end_node, is_start=False)
+            if self.end_offset is not None:
+                self.end_control.offset = QPointF(self.end_offset)
             scene.addItem(self.end_control)
         
         if self.waypoint_control is None:
@@ -511,7 +515,6 @@ class Edge(QGraphicsPathItem):
             pass
         
         # Update title position along the path (midpoint)
-        # Update title position along the path (midpoint)
         self.update_title_position()
         
         # Derive arrow direction from the final segment of the path to ensure
@@ -528,16 +531,102 @@ class Edge(QGraphicsPathItem):
         except Exception:
             # If for any reason we can't read the path elements, keep previous values
             pass
-    
-    def itemChange(self, change, value):
-        """Handle item changes"""
-        # No color change on selection - edge stays light blue
-        return super().itemChange(change, value)
 
     def set_title(self, text: str):
-        """Set the edge title text"""
-        self.title_item.setPlainText(text)
-        self.update_title_position()
+        """Set the edge title text."""
+        if self.title_item:
+            self.title_item.setPlainText(text)
+            self.update_title_position()
+
+    def snap_endpoints_to_nodes(self, saved_start=None, saved_end=None):
+        """Ensure both endpoints land on their node boundaries."""
+        self._snap_endpoint_to_node(is_start=True, preferred_offset=saved_start)
+        self._snap_endpoint_to_node(is_start=False, preferred_offset=saved_end)
+        self.update_path()
+
+    def _snap_endpoint_to_node(self, is_start, preferred_offset=None):
+        node = self._start_node if is_start else self._end_node
+        other_node = self._end_node if is_start else self._start_node
+        if node is None:
+            return
+
+        chosen_offset = None
+        if preferred_offset is not None:
+            chosen_offset = QPointF(preferred_offset)
+        else:
+            if other_node:
+                other_scene_pos = other_node.scenePos()
+            else:
+                other_scene_pos = self._end_pos if is_start else self._start_pos
+            local_other = node.mapFromScene(other_scene_pos)
+            if hasattr(node, 'get_border_intersection'):
+                border_point = node.get_border_intersection(local_other)
+                if border_point is not None:
+                    chosen_offset = QPointF(border_point)
+
+        if chosen_offset is None:
+            return
+
+        if is_start:
+            self.start_offset = QPointF(chosen_offset)
+            if self.start_control:
+                self.start_control.offset = QPointF(chosen_offset)
+                self.start_control.update_position()
+        else:
+            self.end_offset = QPointF(chosen_offset)
+            if self.end_control:
+                self.end_control.offset = QPointF(chosen_offset)
+                self.end_control.update_position()
+
+    def _is_point_on_node_border(self, node, point):
+        if not hasattr(node, 'rect'):
+            return False
+        rect = node.rect
+        if not isinstance(point, QPointF):
+            point = QPointF(point)
+        if not rect.contains(point):
+            return False
+        epsilon = 0.5
+        on_left = abs(point.x() - rect.left()) <= epsilon
+        on_right = abs(point.x() - rect.right()) <= epsilon
+        on_top = abs(point.y() - rect.top()) <= epsilon
+        on_bottom = abs(point.y() - rect.bottom()) <= epsilon
+        return on_left or on_right or on_top or on_bottom
+
+    def get_endpoint_offset(self, is_start):
+        """Return the stored local offset for the requested endpoint if available."""
+        node = self._start_node if is_start else self._end_node
+        if node is None:
+            return None
+
+        control = self.start_control if is_start else self.end_control
+        cached_offset = self.start_offset if is_start else self.end_offset
+
+        if control and hasattr(control, 'offset') and control.offset is not None:
+            return QPointF(control.offset)
+
+        if cached_offset is not None:
+            return QPointF(cached_offset)
+
+        # Fall back to calculating an intersection toward the opposite endpoint
+        if is_start:
+            reference_scene_pos = self._end_node.scenePos() if self._end_node else self._end_pos
+        else:
+            reference_scene_pos = self._start_node.scenePos() if self._start_node else self._start_pos
+
+        local_reference = node.mapFromScene(reference_scene_pos)
+        if hasattr(node, 'get_border_intersection'):
+            intersection = node.get_border_intersection(local_reference)
+            if intersection is not None:
+                return QPointF(intersection)
+
+        if hasattr(node, 'rect'):
+            rect = node.rect
+            # Default to top edge center if no better data
+            fallback_point = QPointF(rect.center().x(), rect.top())
+            return fallback_point
+
+        return QPointF(0, 0)
 
     def _ensure_default_title(self):
         """Assign a default title like 'Edge N' after connection if empty."""
