@@ -989,7 +989,7 @@ class Node(QGraphicsItem):
             super().mouseMoveEvent(event)
     
     def mouseReleaseEvent(self, event):
-        """Handle mouse release events for resizing"""
+        """Handle mouse release events for resizing and movement"""
         if hasattr(self, 'is_resizing') and self.is_resizing:
             self.is_resizing = False
             
@@ -1009,6 +1009,29 @@ class Node(QGraphicsItem):
             
             # After resizing, update Z-order of all nodes in the scene
             self.update_z_order()
+        
+        # Record movement for undo if position changed during drag
+        if self.position_before_move is not None and self.position_before_move != self.pos():
+            # Get the main window to record the undo action
+            if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+                view = self.scene().views()[0]
+                main_window = None
+                if hasattr(view, 'window'):
+                    main_window = view.window()
+                
+                if main_window and hasattr(main_window, 'record_node_movement'):
+                    main_window.record_node_movement(self, self.position_before_move, self.pos())
+            
+            # Signal that node movement is complete
+            if self.action_monitor:
+                self.action_monitor.signal_action('node_moved')
+            
+            self.position_before_move = None
+        
+        # Reset the moving flag
+        if self.is_being_moved:
+            self.is_being_moved = False
+        
         super().mouseReleaseEvent(event)
         
     def itemChange(self, change, value):
@@ -1022,28 +1045,9 @@ class Node(QGraphicsItem):
             # Update edges for this node and all descendants recursively
             self.update_descendant_edges()
             
-            # Record the movement for undo if position changed
-            if self.position_before_move is not None and self.position_before_move != self.pos():
-                # Get the main window to record the undo action
-                if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
-                    view = self.scene().views()[0]
-                    # Try to get the main window - it could be view.parent() or we need to traverse up
-                    main_window = None
-                    if hasattr(view, 'window'):
-                        main_window = view.window()
-                    
-                    if main_window and hasattr(main_window, 'record_node_movement'):
-                        main_window.record_node_movement(self, self.position_before_move, self.pos())
-                
-                # Signal that node movement is complete
-                if self.action_monitor:
-                    self.action_monitor.signal_action('node_moved')
-                
-                self.position_before_move = None
-            
-            # Reset the moving flag
-            if self.is_being_moved:
-                self.is_being_moved = False
+            # Only record movement when drag is complete (is_being_moved becomes False)
+            # Don't record during the drag itself, as this fires many times
+            # The actual recording will happen in mouseReleaseEvent
             
         elif change == QGraphicsItem.ItemSelectedHasChanged and self.scene():
             # When selection changes, ensure selected items are on top
@@ -1239,12 +1243,18 @@ class NodeEditorWindow(QMainWindow):
         
         toolbar.addSeparator()
         
-        # Undo action with custom undo icon (SVG)
+        # Undo/Redo actions with custom icons
         undo_action = toolbar.addAction("Undo")
         undo_action.setToolTip("Undo last action")
         undo_action.setIcon(self.make_undo_svg_icon(24))
         undo_action.triggered.connect(self.undo_action)
         undo_action.setShortcut("Ctrl+Z")
+
+        redo_action = toolbar.addAction("Redo")
+        redo_action.setToolTip("Redo last undone action")
+        redo_action.setIcon(self.make_redo_svg_icon(24))
+        redo_action.triggered.connect(self.redo_action)
+        redo_action.setShortcut("Ctrl+Y")
         
         # Delete selected items action with custom red cross icon (SVG)
         delete_action = toolbar.addAction("Delete")
@@ -1292,8 +1302,9 @@ class NodeEditorWindow(QMainWindow):
         self.edge_start = None
         self.current_edge = None
         
-        # Undo stack for node movements
-        self.undo_stack = []  # Stack of (node, old_pos, new_pos) tuples
+        # Undo/redo stacks
+        self.undo_stack = []
+        self.redo_stack = []
         self.max_undo_stack_size = 50  # Limit stack size to prevent memory issues
         
         # Set up the status bar
@@ -1392,6 +1403,8 @@ class NodeEditorWindow(QMainWindow):
         # Limit stack size
         if len(self.undo_stack) > self.max_undo_stack_size:
             self.undo_stack.pop(0)  # Remove oldest entry
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
     
     def record_node_creation(self, node, parent):
         """Record a node creation for undo functionality"""
@@ -1405,6 +1418,8 @@ class NodeEditorWindow(QMainWindow):
         # Limit stack size
         if len(self.undo_stack) > self.max_undo_stack_size:
             self.undo_stack.pop(0)
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
     
     def record_node_deletion(self, node):
         """Record a node deletion for undo functionality"""
@@ -1425,6 +1440,10 @@ class NodeEditorWindow(QMainWindow):
         # Limit stack size
         if len(self.undo_stack) > self.max_undo_stack_size:
             self.undo_stack.pop(0)
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
     
     def record_node_type_change(self, node, old_type, new_type, old_title):
         """Record a node type change for undo functionality"""
@@ -1439,6 +1458,8 @@ class NodeEditorWindow(QMainWindow):
         # Limit stack size
         if len(self.undo_stack) > self.max_undo_stack_size:
             self.undo_stack.pop(0)
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
     
     def record_node_resize(self, node, old_rect, new_rect):
         """Record a node resize for undo functionality"""
@@ -1452,6 +1473,8 @@ class NodeEditorWindow(QMainWindow):
         # Limit stack size
         if len(self.undo_stack) > self.max_undo_stack_size:
             self.undo_stack.pop(0)
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
     
     def record_edge_creation(self, edge):
         """Record an edge creation for undo functionality"""
@@ -1465,6 +1488,8 @@ class NodeEditorWindow(QMainWindow):
         # Limit stack size
         if len(self.undo_stack) > self.max_undo_stack_size:
             self.undo_stack.pop(0)
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
     
     def record_edge_deletion(self, edge):
         """Record an edge deletion for undo functionality"""
@@ -1500,6 +1525,8 @@ class NodeEditorWindow(QMainWindow):
         # Limit stack size
         if len(self.undo_stack) > self.max_undo_stack_size:
             self.undo_stack.pop(0)
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
     
     def record_edge_waypoint_change(self, edge, old_ratio, new_ratio):
         """Record an edge waypoint adjustment for undo functionality"""
@@ -1513,6 +1540,8 @@ class NodeEditorWindow(QMainWindow):
         # Limit stack size
         if len(self.undo_stack) > self.max_undo_stack_size:
             self.undo_stack.pop(0)
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
     
     def record_node_title_change(self, node, old_title, new_title):
         """Record a node title change for undo functionality"""
@@ -1526,6 +1555,8 @@ class NodeEditorWindow(QMainWindow):
         # Limit stack size
         if len(self.undo_stack) > self.max_undo_stack_size:
             self.undo_stack.pop(0)
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
     
     def record_edge_title_change(self, edge, old_title, new_title):
         """Record an edge title change for undo functionality"""
@@ -1539,6 +1570,8 @@ class NodeEditorWindow(QMainWindow):
         # Limit stack size
         if len(self.undo_stack) > self.max_undo_stack_size:
             self.undo_stack.pop(0)
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
 
     def record_node_initial_change(self, node, was_initial, is_initial):
         """Record toggling of a node's initial state."""
@@ -1550,6 +1583,8 @@ class NodeEditorWindow(QMainWindow):
         })
         if len(self.undo_stack) > self.max_undo_stack_size:
             self.undo_stack.pop(0)
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
     
     def undo_action(self):
         """Undo the last action"""
@@ -1746,6 +1781,7 @@ class NodeEditorWindow(QMainWindow):
                         self.scene.edges.append(edge)
             
             self.statusBar().showMessage(f"Undone: Node '{node_data['title']}' and {len(action.get('connected_edges', []))} edge(s) restored", 2000)
+            action['restored_node'] = node
         
         elif action_type == 'node_type_change':
             # Undo node type change
@@ -1802,13 +1838,16 @@ class NodeEditorWindow(QMainWindow):
                 # Remove from scene's edges list
                 if hasattr(self.scene, 'edges') and edge in self.scene.edges:
                     self.scene.edges.remove(edge)
-                # Remove control points and edge from scene
+                # Remove control points and edge from scene, and null out references
                 if edge.start_control and edge.start_control.scene():
                     self.scene.removeItem(edge.start_control)
+                    edge.start_control = None
                 if edge.end_control and edge.end_control.scene():
                     self.scene.removeItem(edge.end_control)
+                    edge.end_control = None
                 if edge.waypoint_control and edge.waypoint_control.scene():
                     self.scene.removeItem(edge.waypoint_control)
+                    edge.waypoint_control = None
                 if edge.title_item and edge.title_item.scene():
                     self.scene.removeItem(edge.title_item)
                 self.scene.removeItem(edge)
@@ -1873,6 +1912,7 @@ class NodeEditorWindow(QMainWindow):
                 self.scene.edges.append(edge)
                 
                 self.statusBar().showMessage(f"Undone: Edge '{edge_data['title']}' restored", 2000)
+                action['restored_edge'] = edge
             else:
                 self.statusBar().showMessage("Cannot undo: Connected nodes no longer exist", 2000)
                 return
@@ -1946,12 +1986,226 @@ class NodeEditorWindow(QMainWindow):
                 self.statusBar().showMessage("Cannot undo: Edge no longer exists", 2000)
                 return
         
+        # After successful undo, push this action onto the redo stack
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.append(action)
+            if len(self.redo_stack) > self.max_undo_stack_size:
+                self.redo_stack.pop(0)
+
         # Signal the undo action
         if hasattr(self, 'action_monitor'):
             # Add undo action type if not already present
             if 'undo' not in self.action_monitor.actions:
                 self.action_monitor.add_action_type('undo', QColor("#9B59B6"), 300)  # Purple
             self.action_monitor.signal_action('undo')
+
+    def redo_action(self):
+        """Redo the last undone action"""
+        if not hasattr(self, 'redo_stack') or not self.redo_stack:
+            self.statusBar().showMessage("Nothing to redo", 2000)
+            return
+
+        action = self.redo_stack.pop()
+        action_type = action['type']
+
+        if action_type == 'node_move':
+            node = action['node']
+            old_pos = action['old_pos']
+            new_pos = action['new_pos']
+
+            if node.scene() == self.scene:
+                # Make sure this synthetic move is not recorded as another user move
+                node.position_before_move = None
+                node.is_being_moved = False
+
+                # Force the visual update by ensuring the position actually changes
+                # Use prepareGeometryChange to notify the scene of the upcoming change
+                node.prepareGeometryChange()
+                node.setPos(new_pos)
+                node.update()
+                node.update_descendant_edges()
+                self.statusBar().showMessage("Redone: Node moved to new position", 2000)
+            else:
+                self.statusBar().showMessage("Cannot redo: Node no longer exists", 2000)
+                return
+
+        elif action_type == 'node_create':
+            node = action['node']
+            parent = action['parent']
+            position = action.get('position', node.pos())
+
+            if node.scene() == self.scene:
+                self.statusBar().showMessage("Cannot redo: Node already exists", 2000)
+                return
+
+            if parent:
+                parent.add_child_node(node, pos=position)
+            else:
+                self.scene.addItem(node)
+                if node not in self.nodes:
+                    self.nodes.append(node)
+                node.setPos(position)
+
+            self.statusBar().showMessage(f"Redone: Node '{node.title}' creation restored", 2000)
+
+        elif action_type == 'node_delete':
+            node = action.get('restored_node')
+            node_data = action.get('node_data', {})
+
+            if not node or node.scene() != self.scene:
+                self.statusBar().showMessage("Cannot redo: Node no longer exists", 2000)
+                return
+
+            title = getattr(node, 'title', node_data.get('title', ""))
+            self.delete_node(node, record_for_undo=False)
+            self.statusBar().showMessage(f"Redone: Node '{title}' deleted again", 2000)
+
+        elif action_type == 'node_type_change':
+            node = action['node']
+            new_type = action['new_type']
+
+            if node.scene() == self.scene:
+                node.set_node_type(new_type)
+                type_name = new_type if new_type else "None"
+                self.statusBar().showMessage(f"Redone: Node type changed to {type_name}", 2000)
+            else:
+                self.statusBar().showMessage("Cannot redo: Node no longer exists", 2000)
+                return
+
+        elif action_type == 'node_resize':
+            node = action['node']
+            new_rect = action['new_rect']
+
+            if node.scene() == self.scene:
+                node.prepareGeometryChange()
+                node.rect = new_rect
+                if hasattr(node, 'update_handles'):
+                    node.update_handles()
+                node.update()
+                self.statusBar().showMessage(f"Redone: Node '{node.title}' resized", 2000)
+            else:
+                self.statusBar().showMessage("Cannot redo: Node no longer exists", 2000)
+                return
+
+        elif action_type == 'node_initial_change':
+            node = action['node']
+            is_initial = action['is_initial']
+            if node.scene() == self.scene and node.node_type == "State":
+                node.set_initial_state(is_initial)
+                state_text = "initial" if is_initial else "non-initial"
+                self.statusBar().showMessage(f"Redone: Node marked as {state_text}", 2000)
+            else:
+                self.statusBar().showMessage("Cannot redo: Node no longer exists", 2000)
+                return
+
+        elif action_type == 'edge_create':
+            from edge import Edge
+            edge = action['edge']
+            start_node = action.get('start_node')
+            end_node = action.get('end_node')
+
+            if not start_node or not end_node:
+                self.statusBar().showMessage("Cannot redo: Connected nodes no longer exist", 2000)
+                return
+
+            if start_node.scene() != self.scene or end_node.scene() != self.scene:
+                self.statusBar().showMessage("Cannot redo: Connected nodes no longer exist", 2000)
+                return
+
+            if edge.scene() != self.scene:
+                edge.set_start_node(start_node)
+                edge.set_end_node(end_node)
+                self.scene.addItem(edge)
+                edge.create_control_points(self.scene)
+                if not hasattr(self.scene, 'edges'):
+                    self.scene.edges = []
+                if edge not in self.scene.edges:
+                    self.scene.edges.append(edge)
+
+            self.statusBar().showMessage("Redone: Edge creation restored", 2000)
+
+        elif action_type == 'edge_delete':
+            edge = action.get('restored_edge')
+            edge_data = action.get('edge_data', {})
+
+            if not edge or edge.scene() != self.scene:
+                self.statusBar().showMessage("Cannot redo: Edge no longer exists", 2000)
+                return
+
+            title = edge.title_item.toPlainText() if edge.title_item else edge_data.get('title', "")
+            edge.delete_edge(record_for_undo=False)
+            self.statusBar().showMessage(f"Redone: Edge '{title}' deleted again", 2000)
+
+        elif action_type == 'edge_connection_change':
+            edge = action['edge']
+            is_start = action['is_start']
+            new_offset = action['new_offset']
+
+            if edge.scene() == self.scene:
+                if is_start and edge.start_control:
+                    edge.start_control.offset = new_offset
+                    edge.start_control.update_position()
+                elif not is_start and edge.end_control:
+                    edge.end_control.offset = new_offset
+                    edge.end_control.update_position()
+
+                edge.update_path()
+                point_name = "start" if is_start else "end"
+                self.statusBar().showMessage(f"Redone: Edge {point_name} connection point changed", 2000)
+            else:
+                self.statusBar().showMessage("Cannot redo: Edge no longer exists", 2000)
+                return
+
+        elif action_type == 'edge_waypoint_change':
+            edge = action['edge']
+            new_ratio = action['new_ratio']
+
+            if edge.scene() == self.scene:
+                edge.waypoint_ratio = new_ratio if new_ratio is not None else 0.5
+                edge.update_path()
+                self.statusBar().showMessage("Redone: Edge waypoint adjusted", 2000)
+            else:
+                self.statusBar().showMessage("Cannot redo: Edge no longer exists", 2000)
+                return
+
+        elif action_type == 'node_title_change':
+            node = action['node']
+            new_title = action['new_title']
+
+            if node.scene() == self.scene:
+                node.title = new_title
+                node.title_item.setPlainText(new_title)
+                node.update()
+                self.statusBar().showMessage(f"Redone: Node title changed to '{new_title}'", 2000)
+            else:
+                self.statusBar().showMessage("Cannot redo: Node no longer exists", 2000)
+                return
+
+        elif action_type == 'edge_title_change':
+            edge = action['edge']
+            new_title = action['new_title']
+
+            if edge.scene() == self.scene:
+                edge.set_title(new_title)
+                self.statusBar().showMessage(f"Redone: Edge title changed to '{new_title}'", 2000)
+            else:
+                self.statusBar().showMessage("Cannot redo: Edge no longer exists", 2000)
+                return
+
+        else:
+            self.statusBar().showMessage("Cannot redo: Unknown action type", 2000)
+            return
+
+        # After successful redo, push this action back onto the undo stack
+        if hasattr(self, 'undo_stack'):
+            self.undo_stack.append(action)
+            if len(self.undo_stack) > self.max_undo_stack_size:
+                self.undo_stack.pop(0)
+
+        if hasattr(self, 'action_monitor'):
+            if 'redo' not in self.action_monitor.actions:
+                self.action_monitor.add_action_type('redo', QColor("#1ABC9C"), 300)
+            self.action_monitor.signal_action('redo')
     
     def delete_selected_items(self):
         """Delete all selected items (nodes and edges)"""
@@ -2394,6 +2648,26 @@ class NodeEditorWindow(QMainWindow):
           <path d="M9 14 L4 9 L9 4" stroke="#3498db" stroke-width="2.5" 
                 stroke-linecap="round" stroke-linejoin="round" fill="none"/>
           <path d="M4 9 L13 9 C16.866 9 20 12.134 20 16 C20 16.552 19.552 17 19 17" 
+                stroke="#3498db" stroke-width="2.5" stroke-linecap="round" fill="none"/>
+        </svg>
+        """
+        renderer = QSvgRenderer(QByteArray(svg.encode("utf-8")))
+        pm = QPixmap(size, size)
+        pm.fill(Qt.transparent)
+        painter = QPainter(pm)
+        painter.setRenderHint(QPainter.Antialiasing, True)
+        renderer.render(painter)
+        painter.end()
+        return QIcon(pm)
+    
+    def make_redo_svg_icon(self, size=24) -> QIcon:
+        """Create a redo icon with a curved arrow pointing right."""
+        svg = f"""
+        <svg width="{size}" height="{size}" viewBox="0 0 24 24" fill="none"
+             xmlns="http://www.w3.org/2000/svg">
+          <path d="M15 14 L20 9 L15 4" stroke="#3498db" stroke-width="2.5"
+                stroke-linecap="round" stroke-linejoin="round" fill="none"/>
+          <path d="M20 9 L11 9 C7.134 9 4 12.134 4 16 C4 16.552 4.448 17 5 17"
                 stroke="#3498db" stroke-width="2.5" stroke-linecap="round" fill="none"/>
         </svg>
         """
