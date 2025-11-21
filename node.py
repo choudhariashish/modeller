@@ -255,8 +255,8 @@ class NodeEditorGraphicsView(QGraphicsView):
         scene_pos = self.mapToScene(pos)
         local_pos = parent_node.mapFromScene(scene_pos)
         
-        # Create and add the child node
-        child = Node("Child Node", local_pos, parent_node)
+        # Create the child node without setting position yet (will be set by add_child_node)
+        child = Node("Child Node", None, parent_node)
         
         # Set the action monitor reference (inherit from parent or get from main window)
         main_window = None
@@ -269,7 +269,8 @@ class NodeEditorGraphicsView(QGraphicsView):
             if hasattr(self, 'window'):
                 main_window = self.window()
             
-        parent_node.add_child_node(child)
+        # Add child node at the clicked position
+        parent_node.add_child_node(child, local_pos)
         
         # Record child node creation for undo
         if main_window and hasattr(main_window, 'record_node_creation'):
@@ -493,6 +494,7 @@ class Node(QGraphicsItem):
         self.action_monitor = None  # Will be set by the main window
         self.is_being_moved = False
         self.position_before_move = None  # Track position before movement for undo
+        self._checking_parent = False  # Flag to prevent recursive parent checks
         
         # Node state
         self.child_nodes = []
@@ -514,7 +516,13 @@ class Node(QGraphicsItem):
         
         # Set position if provided
         if pos is not None:
+            # Clear position tracking to avoid recording initial position as a "move"
+            self.position_before_move = None
+            self.is_being_moved = False
             self.setPos(pos)
+            print(f"[DEBUG] Node created: '{self.title}' at position ({pos.x():.2f}, {pos.y():.2f})")
+        else:
+            print(f"[DEBUG] Node created: '{self.title}' at default position (0.00, 0.00)")
             
         # Node colors (default blue)
         self.title_color = QColor("#3498db")  # Light blue color for title bar
@@ -995,6 +1003,8 @@ class Node(QGraphicsItem):
             
             # Record resize for undo if the rect actually changed
             if hasattr(self, 'rect_before_resize') and self.rect_before_resize != self.rect:
+                print(f"[DEBUG] Node resized: '{self.title}' from size ({self.rect_before_resize.width():.2f}, {self.rect_before_resize.height():.2f}) to ({self.rect.width():.2f}, {self.rect.height():.2f}) at position ({self.pos().x():.2f}, {self.pos().y():.2f})")
+                
                 # Get the main window to record the undo action
                 if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
                     view = self.scene().views()[0]
@@ -1011,7 +1021,11 @@ class Node(QGraphicsItem):
             self.update_z_order()
         
         # Record movement for undo if position changed during drag
+        position_actually_changed = False
         if self.position_before_move is not None and self.position_before_move != self.pos():
+            position_actually_changed = True
+            print(f"[DEBUG] Node moved: '{self.title}' from position ({self.position_before_move.x():.2f}, {self.position_before_move.y():.2f}) to ({self.pos().x():.2f}, {self.pos().y():.2f})")
+            
             # Get the main window to record the undo action
             if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
                 view = self.scene().views()[0]
@@ -1028,9 +1042,13 @@ class Node(QGraphicsItem):
             
             self.position_before_move = None
         
-        # Reset the moving flag
+        # Reset the moving flag and check for parent relationship after drag is complete
         if self.is_being_moved:
             self.is_being_moved = False
+            # Only check parent if position actually changed (i.e., it was a drag, not just a click)
+            if position_actually_changed:
+                # Now check if this node should be reparented after the drag is complete
+                self._check_and_update_parent()
         
         super().mouseReleaseEvent(event)
         
@@ -1044,6 +1062,9 @@ class Node(QGraphicsItem):
         elif change == QGraphicsItem.ItemPositionHasChanged and self.scene():
             # Update edges for this node and all descendants recursively
             self.update_descendant_edges()
+            
+            # Don't check parent during drag to avoid flickering
+            # Parent check will happen in mouseReleaseEvent after drag is complete
             
             # Only record movement when drag is complete (is_being_moved becomes False)
             # Don't record during the drag itself, as this fires many times
@@ -1101,6 +1122,150 @@ class Node(QGraphicsItem):
         # But only if we're not already above them
         if max_z >= 0 and self.zValue() <= max_z:
             self.setZValue(max_z + 1)
+    
+    def _check_and_update_parent(self):
+        """Check if this node is completely inside another node and update parent relationship"""
+        if not self.scene():
+            return
+        
+        # Prevent recursive calls
+        if self._checking_parent:
+            return
+        
+        # Don't check during resizing
+        if hasattr(self, 'is_resizing') and self.is_resizing:
+            return
+        
+        # Set flag to prevent recursion
+        self._checking_parent = True
+        
+        try:
+            # Get this node's bounding rect in scene coordinates
+            my_scene_rect = self.sceneBoundingRect()
+            
+            # Find all nodes in the scene (excluding self and any descendants)
+            all_nodes = [item for item in self.scene().items() if isinstance(item, Node) and item != self]
+            
+            # Find potential parent nodes (nodes that could contain this node)
+            potential_parents = []
+            for node in all_nodes:
+                # Skip if this node is already a parent/ancestor of the candidate
+                # (i.e., if the candidate is trying to become a parent of its own ancestor)
+                if self._is_ancestor_of(node):
+                    continue
+                
+                # Skip if the candidate is a child/descendant of this node
+                # BUT don't skip if it's the direct parent - we want to keep it as a candidate
+                # to verify it should still be the parent
+                if node._is_ancestor_of(self) and node != self.parent_node:
+                    continue
+                
+                # Get the candidate's bounding rect in scene coordinates
+                node_scene_rect = node.sceneBoundingRect()
+                
+                # Check if this node is completely inside the candidate node's boundary
+                # We need to check if all corners of my_scene_rect are inside node_scene_rect
+                if node_scene_rect.contains(my_scene_rect):
+                    potential_parents.append(node)
+            
+            # If we found potential parents, choose the smallest one (most specific container)
+            if potential_parents:
+                # Sort by area (smallest first)
+                potential_parents.sort(key=lambda n: n.rect.width() * n.rect.height())
+                new_parent = potential_parents[0]
+                
+                # Only update if the parent is different
+                if new_parent != self.parent_node:
+                    self._reparent_to(new_parent)
+            else:
+                # If not inside any node and has a parent, remove from parent
+                if self.parent_node is not None:
+                    self._remove_from_parent()
+        finally:
+            # Always reset the flag
+            self._checking_parent = False
+    
+    def _is_ancestor_of(self, node):
+        """Check if this node is an ancestor of the given node"""
+        current = node.parent_node
+        while current is not None:
+            if current == self:
+                return True
+            current = current.parent_node
+        return False
+    
+    def _reparent_to(self, new_parent):
+        """Change the parent of this node to the specified parent"""
+        # Save the current scene position and parent before any changes
+        scene_pos = self.scenePos()
+        old_parent = self.parent_node
+        old_pos = QPointF(self.pos()) if old_parent else None
+        
+        # Remove from current parent if any
+        if self.parent_node is not None:
+            self.parent_node.remove_child_node(self)
+        
+        # Set up the new parent as a container if needed
+        if not new_parent.is_container:
+            new_parent.setup_container()
+        
+        # Temporarily disable position tracking to avoid triggering itemChange
+        old_flags = self.flags()
+        self.setFlag(QGraphicsItem.ItemSendsGeometryChanges, False)
+        
+        # Add to new parent (this will call setParentItem)
+        # Pass None for pos so add_child_node doesn't set position yet
+        new_parent.add_child_node(self, None)
+        
+        # Now convert scene position to new parent's local coordinates and set it
+        local_pos = new_parent.mapFromScene(scene_pos)
+        self.setPos(local_pos)
+        
+        # Re-enable position tracking
+        self.setFlag(QGraphicsItem.ItemSendsGeometryChanges, True)
+        
+        # Record the reparenting for undo
+        if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+            view = self.scene().views()[0]
+            main_window = None
+            if hasattr(view, 'window'):
+                main_window = view.window()
+            
+            if main_window and hasattr(main_window, 'record_node_reparent'):
+                main_window.record_node_reparent(self, old_parent, new_parent, old_pos)
+    
+    def _remove_from_parent(self):
+        """Remove this node from its parent and add to main scene"""
+        if self.parent_node is None:
+            return
+        
+        # Save state before removing from parent
+        scene_pos = self.scenePos()
+        old_parent = self.parent_node
+        old_pos = QPointF(self.pos())
+        
+        # Store the scene reference
+        scene = self.scene()
+        
+        # Remove from parent (this also calls setParentItem(None))
+        self.parent_node.remove_child_node(self)
+        
+        # Add to main scene if needed
+        if scene and self.scene() != scene:
+            scene.addItem(self)
+        
+        # Restore scene position
+        self.setPos(scene_pos)
+        
+        # Record the reparenting for undo (removing from parent = reparenting to None)
+        if scene and hasattr(scene, 'views') and scene.views():
+            view = scene.views()[0]
+            main_window = None
+            if hasattr(view, 'window'):
+                main_window = view.window()
+            
+            if main_window and hasattr(main_window, 'record_node_reparent'):
+                main_window.record_node_reparent(self, old_parent, None, old_pos)
             
     def get_border_intersection(self, point):
         """
@@ -1608,6 +1773,23 @@ class NodeEditorWindow(QMainWindow):
         if hasattr(self, 'redo_stack'):
             self.redo_stack.clear()
     
+    def record_node_reparent(self, node, old_parent, new_parent, old_pos):
+        """Record a node reparenting for undo functionality"""
+        self.undo_stack.append({
+            'type': 'node_reparent',
+            'node': node,
+            'old_parent': old_parent,
+            'new_parent': new_parent,
+            'old_pos': QPointF(old_pos) if old_pos else None,
+            'new_pos': QPointF(node.pos())
+        })
+        
+        # Limit stack size
+        if len(self.undo_stack) > self.max_undo_stack_size:
+            self.undo_stack.pop(0)
+        if hasattr(self, 'redo_stack'):
+            self.redo_stack.clear()
+    
     def undo_action(self):
         """Undo the last action"""
         if not self.undo_stack:
@@ -1636,6 +1818,9 @@ class NodeEditorWindow(QMainWindow):
                 node.position_before_move = None
                 node.is_being_moved = False
                 
+                new_pos = action['new_pos']
+                print(f"[DEBUG] UNDO node move: '{node.title}' from position ({new_pos.x():.2f}, {new_pos.y():.2f}) back to ({old_pos.x():.2f}, {old_pos.y():.2f})")
+                
                 # Move the node back to its old position
                 node.setPos(old_pos)
                 
@@ -1653,6 +1838,8 @@ class NodeEditorWindow(QMainWindow):
             parent = action['parent']
             
             if node.scene() == self.scene:
+                print(f"[DEBUG] UNDO node create: Deleting node '{node.title}' at position ({node.pos().x():.2f}, {node.pos().y():.2f})")
+                
                 # Remove from parent's child list if it has a parent
                 if parent and node in parent.child_nodes:
                     parent.child_nodes.remove(node)
@@ -1719,11 +1906,13 @@ class NodeEditorWindow(QMainWindow):
                 # For child nodes, set position after adding to parent
                 # The position is relative to the parent
                 node.setPos(node_data['position'])
+                print(f"[DEBUG] UNDO node delete: Recreated node '{node.title}' at position ({node_data['position'].x():.2f}, {node_data['position'].y():.2f}) as child of '{node_data['parent'].title}'")
             else:
                 self.scene.addItem(node)
                 self.nodes.append(node)
                 # For top-level nodes, set position directly
                 node.setPos(node_data['position'])
+                print(f"[DEBUG] UNDO node delete: Recreated node '{node.title}' at position ({node_data['position'].x():.2f}, {node_data['position'].y():.2f})")
 
             # Update any stored edge deletion records to reference this new node instance
             self._relink_stored_edge_nodes(node_data['node_id'], node)
@@ -1829,6 +2018,9 @@ class NodeEditorWindow(QMainWindow):
             old_rect = action['old_rect']
             
             if node.scene() == self.scene:
+                new_rect = action['new_rect']
+                print(f"[DEBUG] UNDO node resize: '{node.title}' from size ({new_rect.width():.2f}, {new_rect.height():.2f}) back to ({old_rect.width():.2f}, {old_rect.height():.2f}) at position ({node.pos().x():.2f}, {node.pos().y():.2f})")
+                
                 # Restore the old rect
                 node.prepareGeometryChange()
                 node.rect = old_rect
@@ -2008,6 +2200,55 @@ class NodeEditorWindow(QMainWindow):
                 self.statusBar().showMessage("Cannot undo: Edge no longer exists", 2000)
                 return
         
+        elif action_type == 'node_reparent':
+            # Undo node reparenting
+            node = action['node']
+            old_parent = action['old_parent']
+            new_parent = action['new_parent']
+            old_pos = action['old_pos']
+            
+            if node.scene() == self.scene or (node.parent_node and node.parent_node.scene() == self.scene):
+                # Print debug info
+                old_parent_name = old_parent.title if old_parent else "main scene"
+                new_parent_name = new_parent.title if new_parent else "main scene"
+                print(f"[DEBUG] UNDO node reparent: '{node.title}' from parent '{new_parent_name}' back to '{old_parent_name}' at position ({old_pos.x():.2f}, {old_pos.y():.2f})" if old_pos else f"[DEBUG] UNDO node reparent: '{node.title}' from parent '{new_parent_name}' back to '{old_parent_name}'")
+                
+                # Temporarily disable parent checking to avoid recording this change
+                node._checking_parent = True
+                
+                try:
+                    # Remove from current parent
+                    if node.parent_node is not None:
+                        node.parent_node.remove_child_node(node)
+                    
+                    # Restore to old parent
+                    if old_parent is not None:
+                        # Re-add to old parent
+                        if not old_parent.is_container:
+                            old_parent.setup_container()
+                        old_parent.add_child_node(node, None)
+                        # Restore old position in parent's coordinate system
+                        if old_pos:
+                            node.setPos(old_pos)
+                    else:
+                        # Add back to main scene
+                        if node.scene() != self.scene:
+                            self.scene.addItem(node)
+                        # Restore old position in scene coordinates
+                        if old_pos:
+                            node.setPos(old_pos)
+                    
+                    # Update edges
+                    node.update_descendant_edges()
+                    
+                    parent_name = old_parent.title if old_parent else "main scene"
+                    self.statusBar().showMessage(f"Undone: Node '{node.title}' reparented back to '{parent_name}'", 2000)
+                finally:
+                    node._checking_parent = False
+            else:
+                self.statusBar().showMessage("Cannot undo: Node no longer exists", 2000)
+                return
+        
         # After successful undo, push this action onto the redo stack
         if hasattr(self, 'redo_stack'):
             self.redo_stack.append(action)
@@ -2036,6 +2277,8 @@ class NodeEditorWindow(QMainWindow):
             new_pos = action['new_pos']
 
             if node.scene() == self.scene:
+                print(f"[DEBUG] REDO node move: '{node.title}' from position ({old_pos.x():.2f}, {old_pos.y():.2f}) to ({new_pos.x():.2f}, {new_pos.y():.2f})")
+                
                 # Make sure this synthetic move is not recorded as another user move
                 node.position_before_move = None
                 node.is_being_moved = False
@@ -2062,11 +2305,13 @@ class NodeEditorWindow(QMainWindow):
 
             if parent:
                 parent.add_child_node(node, pos=position)
+                print(f"[DEBUG] REDO node create: Recreated node '{node.title}' at position ({position.x():.2f}, {position.y():.2f}) as child of '{parent.title}'")
             else:
                 self.scene.addItem(node)
                 if node not in self.nodes:
                     self.nodes.append(node)
                 node.setPos(position)
+                print(f"[DEBUG] REDO node create: Recreated node '{node.title}' at position ({position.x():.2f}, {position.y():.2f})")
 
             self.statusBar().showMessage(f"Redone: Node '{node.title}' creation restored", 2000)
 
@@ -2079,6 +2324,7 @@ class NodeEditorWindow(QMainWindow):
                 return
 
             title = getattr(node, 'title', node_data.get('title', ""))
+            print(f"[DEBUG] REDO node delete: Deleting node '{title}' at position ({node.pos().x():.2f}, {node.pos().y():.2f})")
             self.delete_node(node, record_for_undo=False)
             self.statusBar().showMessage(f"Redone: Node '{title}' deleted again", 2000)
 
@@ -2099,6 +2345,9 @@ class NodeEditorWindow(QMainWindow):
             new_rect = action['new_rect']
 
             if node.scene() == self.scene:
+                old_rect = action['old_rect']
+                print(f"[DEBUG] REDO node resize: '{node.title}' from size ({old_rect.width():.2f}, {old_rect.height():.2f}) to ({new_rect.width():.2f}, {new_rect.height():.2f}) at position ({node.pos().x():.2f}, {node.pos().y():.2f})")
+                
                 node.prepareGeometryChange()
                 node.rect = new_rect
                 if hasattr(node, 'update_handles'):
@@ -2212,6 +2461,55 @@ class NodeEditorWindow(QMainWindow):
                 self.statusBar().showMessage(f"Redone: Edge title changed to '{new_title}'", 2000)
             else:
                 self.statusBar().showMessage("Cannot redo: Edge no longer exists", 2000)
+                return
+        
+        elif action_type == 'node_reparent':
+            # Redo node reparenting
+            node = action['node']
+            old_parent = action['old_parent']
+            new_parent = action['new_parent']
+            new_pos = action['new_pos']
+            
+            if node.scene() == self.scene or (node.parent_node and node.parent_node.scene() == self.scene):
+                # Print debug info
+                old_parent_name = old_parent.title if old_parent else "main scene"
+                new_parent_name = new_parent.title if new_parent else "main scene"
+                print(f"[DEBUG] REDO node reparent: '{node.title}' from parent '{old_parent_name}' to '{new_parent_name}' at position ({new_pos.x():.2f}, {new_pos.y():.2f})" if new_pos else f"[DEBUG] REDO node reparent: '{node.title}' from parent '{old_parent_name}' to '{new_parent_name}'")
+                
+                # Temporarily disable parent checking to avoid recording this change
+                node._checking_parent = True
+                
+                try:
+                    # Remove from current parent
+                    if node.parent_node is not None:
+                        node.parent_node.remove_child_node(node)
+                    
+                    # Restore to new parent
+                    if new_parent is not None:
+                        # Re-add to new parent
+                        if not new_parent.is_container:
+                            new_parent.setup_container()
+                        new_parent.add_child_node(node, None)
+                        # Restore new position in parent's coordinate system
+                        if new_pos:
+                            node.setPos(new_pos)
+                    else:
+                        # Add back to main scene
+                        if node.scene() != self.scene:
+                            self.scene.addItem(node)
+                        # Restore new position in scene coordinates
+                        if new_pos:
+                            node.setPos(new_pos)
+                    
+                    # Update edges
+                    node.update_descendant_edges()
+                    
+                    parent_name = new_parent.title if new_parent else "main scene"
+                    self.statusBar().showMessage(f"Redone: Node '{node.title}' reparented to '{parent_name}'", 2000)
+                finally:
+                    node._checking_parent = False
+            else:
+                self.statusBar().showMessage("Cannot redo: Node no longer exists", 2000)
                 return
 
         else:
