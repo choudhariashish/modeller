@@ -520,9 +520,10 @@ class Node(QGraphicsItem):
             self.position_before_move = None
             self.is_being_moved = False
             self.setPos(pos)
-            print(f"[DEBUG] Node created: '{self.title}' at position ({pos.x():.2f}, {pos.y():.2f})")
+            # print(f"[DEBUG] Node created: '{self.title}' at position ({pos.x():.2f}, {pos.y():.2f})")
         else:
-            print(f"[DEBUG] Node created: '{self.title}' at default position (0.00, 0.00)")
+            pass
+            # print(f"[DEBUG] Node created: '{self.title}' at default position (0.00, 0.00)")
             
         # Node colors (default blue)
         self.title_color = QColor("#3498db")  # Light blue color for title bar
@@ -1003,7 +1004,7 @@ class Node(QGraphicsItem):
             
             # Record resize for undo if the rect actually changed
             if hasattr(self, 'rect_before_resize') and self.rect_before_resize != self.rect:
-                print(f"[DEBUG] Node resized: '{self.title}' from size ({self.rect_before_resize.width():.2f}, {self.rect_before_resize.height():.2f}) to ({self.rect.width():.2f}, {self.rect.height():.2f}) at position ({self.pos().x():.2f}, {self.pos().y():.2f})")
+                # print(f"[DEBUG] Node resized: '{self.title}' from size ({self.rect_before_resize.width():.2f}, {self.rect_before_resize.height():.2f}) to ({self.rect.width():.2f}, {self.rect.height():.2f}) at position ({self.pos().x():.2f}, {self.pos().y():.2f})")
                 
                 # Get the main window to record the undo action
                 if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
@@ -1024,7 +1025,7 @@ class Node(QGraphicsItem):
         position_actually_changed = False
         if self.position_before_move is not None and self.position_before_move != self.pos():
             position_actually_changed = True
-            print(f"[DEBUG] Node moved: '{self.title}' from position ({self.position_before_move.x():.2f}, {self.position_before_move.y():.2f}) to ({self.pos().x():.2f}, {self.pos().y():.2f})")
+            # print(f"[DEBUG] Node moved: '{self.title}' from position ({self.position_before_move.x():.2f}, {self.position_before_move.y():.2f}) to ({self.pos().x():.2f}, {self.pos().y():.2f})")
             
             # Get the main window to record the undo action
             if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
@@ -1819,7 +1820,7 @@ class NodeEditorWindow(QMainWindow):
                 node.is_being_moved = False
                 
                 new_pos = action['new_pos']
-                print(f"[DEBUG] UNDO node move: '{node.title}' from position ({new_pos.x():.2f}, {new_pos.y():.2f}) back to ({old_pos.x():.2f}, {old_pos.y():.2f})")
+                # print(f"[DEBUG] UNDO node move: '{node.title}' from position ({new_pos.x():.2f}, {new_pos.y():.2f}) back to ({old_pos.x():.2f}, {old_pos.y():.2f})")
                 
                 # Move the node back to its old position
                 node.setPos(old_pos)
@@ -1838,7 +1839,7 @@ class NodeEditorWindow(QMainWindow):
             parent = action['parent']
             
             if node.scene() == self.scene:
-                print(f"[DEBUG] UNDO node create: Deleting node '{node.title}' at position ({node.pos().x():.2f}, {node.pos().y():.2f})")
+                # print(f"[DEBUG] UNDO node create: Deleting node '{node.title}' at position ({node.pos().x():.2f}, {node.pos().y():.2f})")
                 
                 # Remove from parent's child list if it has a parent
                 if parent and node in parent.child_nodes:
@@ -1906,13 +1907,13 @@ class NodeEditorWindow(QMainWindow):
                 # For child nodes, set position after adding to parent
                 # The position is relative to the parent
                 node.setPos(node_data['position'])
-                print(f"[DEBUG] UNDO node delete: Recreated node '{node.title}' at position ({node_data['position'].x():.2f}, {node_data['position'].y():.2f}) as child of '{node_data['parent'].title}'")
+                # print(f"[DEBUG] UNDO node delete: Recreated node '{node.title}' at position ({node_data['position'].x():.2f}, {node_data['position'].y():.2f}) as child of '{node_data['parent'].title}'")
             else:
                 self.scene.addItem(node)
                 self.nodes.append(node)
                 # For top-level nodes, set position directly
                 node.setPos(node_data['position'])
-                print(f"[DEBUG] UNDO node delete: Recreated node '{node.title}' at position ({node_data['position'].x():.2f}, {node_data['position'].y():.2f})")
+                # print(f"[DEBUG] UNDO node delete: Recreated node '{node.title}' at position ({node_data['position'].x():.2f}, {node_data['position'].y():.2f})")
 
             # Update any stored edge deletion records to reference this new node instance
             self._relink_stored_edge_nodes(node_data['node_id'], node)
@@ -2019,7 +2020,7 @@ class NodeEditorWindow(QMainWindow):
             
             if node.scene() == self.scene:
                 new_rect = action['new_rect']
-                print(f"[DEBUG] UNDO node resize: '{node.title}' from size ({new_rect.width():.2f}, {new_rect.height():.2f}) back to ({old_rect.width():.2f}, {old_rect.height():.2f}) at position ({node.pos().x():.2f}, {node.pos().y():.2f})")
+                # print(f"[DEBUG] UNDO node resize: '{node.title}' from size ({new_rect.width():.2f}, {new_rect.height():.2f}) back to ({old_rect.width():.2f}, {old_rect.height():.2f}) at position ({node.pos().x():.2f}, {node.pos().y():.2f})")
                 
                 # Restore the old rect
                 node.prepareGeometryChange()
@@ -2211,7 +2212,7 @@ class NodeEditorWindow(QMainWindow):
                 # Print debug info
                 old_parent_name = old_parent.title if old_parent else "main scene"
                 new_parent_name = new_parent.title if new_parent else "main scene"
-                print(f"[DEBUG] UNDO node reparent: '{node.title}' from parent '{new_parent_name}' back to '{old_parent_name}' at position ({old_pos.x():.2f}, {old_pos.y():.2f})" if old_pos else f"[DEBUG] UNDO node reparent: '{node.title}' from parent '{new_parent_name}' back to '{old_parent_name}'")
+                # print(f"[DEBUG] UNDO node reparent: '{node.title}' from parent '{new_parent_name}' back to '{old_parent_name}' at position ({old_pos.x():.2f}, {old_pos.y():.2f})" if old_pos else f"[DEBUG] UNDO node reparent: '{node.title}' from parent '{new_parent_name}' back to '{old_parent_name}'")
                 
                 # Temporarily disable parent checking to avoid recording this change
                 node._checking_parent = True
@@ -2277,7 +2278,7 @@ class NodeEditorWindow(QMainWindow):
             new_pos = action['new_pos']
 
             if node.scene() == self.scene:
-                print(f"[DEBUG] REDO node move: '{node.title}' from position ({old_pos.x():.2f}, {old_pos.y():.2f}) to ({new_pos.x():.2f}, {new_pos.y():.2f})")
+                # print(f"[DEBUG] REDO node move: '{node.title}' from position ({old_pos.x():.2f}, {old_pos.y():.2f}) to ({new_pos.x():.2f}, {new_pos.y():.2f})")
                 
                 # Make sure this synthetic move is not recorded as another user move
                 node.position_before_move = None
@@ -2305,13 +2306,13 @@ class NodeEditorWindow(QMainWindow):
 
             if parent:
                 parent.add_child_node(node, pos=position)
-                print(f"[DEBUG] REDO node create: Recreated node '{node.title}' at position ({position.x():.2f}, {position.y():.2f}) as child of '{parent.title}'")
+                # print(f"[DEBUG] REDO node create: Recreated node '{node.title}' at position ({position.x():.2f}, {position.y():.2f}) as child of '{parent.title}'")
             else:
                 self.scene.addItem(node)
                 if node not in self.nodes:
                     self.nodes.append(node)
                 node.setPos(position)
-                print(f"[DEBUG] REDO node create: Recreated node '{node.title}' at position ({position.x():.2f}, {position.y():.2f})")
+                # print(f"[DEBUG] REDO node create: Recreated node '{node.title}' at position ({position.x():.2f}, {position.y():.2f})")
 
             self.statusBar().showMessage(f"Redone: Node '{node.title}' creation restored", 2000)
 
@@ -2324,7 +2325,7 @@ class NodeEditorWindow(QMainWindow):
                 return
 
             title = getattr(node, 'title', node_data.get('title', ""))
-            print(f"[DEBUG] REDO node delete: Deleting node '{title}' at position ({node.pos().x():.2f}, {node.pos().y():.2f})")
+            # print(f"[DEBUG] REDO node delete: Deleting node '{title}' at position ({node.pos().x():.2f}, {node.pos().y():.2f})")
             self.delete_node(node, record_for_undo=False)
             self.statusBar().showMessage(f"Redone: Node '{title}' deleted again", 2000)
 
@@ -2346,7 +2347,7 @@ class NodeEditorWindow(QMainWindow):
 
             if node.scene() == self.scene:
                 old_rect = action['old_rect']
-                print(f"[DEBUG] REDO node resize: '{node.title}' from size ({old_rect.width():.2f}, {old_rect.height():.2f}) to ({new_rect.width():.2f}, {new_rect.height():.2f}) at position ({node.pos().x():.2f}, {node.pos().y():.2f})")
+                # print(f"[DEBUG] REDO node resize: '{node.title}' from size ({old_rect.width():.2f}, {old_rect.height():.2f}) to ({new_rect.width():.2f}, {new_rect.height():.2f}) at position ({node.pos().x():.2f}, {node.pos().y():.2f})")
                 
                 node.prepareGeometryChange()
                 node.rect = new_rect
@@ -2474,7 +2475,7 @@ class NodeEditorWindow(QMainWindow):
                 # Print debug info
                 old_parent_name = old_parent.title if old_parent else "main scene"
                 new_parent_name = new_parent.title if new_parent else "main scene"
-                print(f"[DEBUG] REDO node reparent: '{node.title}' from parent '{old_parent_name}' to '{new_parent_name}' at position ({new_pos.x():.2f}, {new_pos.y():.2f})" if new_pos else f"[DEBUG] REDO node reparent: '{node.title}' from parent '{old_parent_name}' to '{new_parent_name}'")
+                # print(f"[DEBUG] REDO node reparent: '{node.title}' from parent '{old_parent_name}' to '{new_parent_name}' at position ({new_pos.x():.2f}, {new_pos.y():.2f})" if new_pos else f"[DEBUG] REDO node reparent: '{node.title}' from parent '{old_parent_name}' to '{new_parent_name}'")
                 
                 # Temporarily disable parent checking to avoid recording this change
                 node._checking_parent = True
