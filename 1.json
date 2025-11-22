@@ -1,0 +1,500 @@
+{
+  "nodes": [
+    {
+      "title": "StateMachine",
+      "pos": {
+        "x": -883.0,
+        "y": -335.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 1854.0,
+        "height": 1076.0
+      },
+      "node_type": "StateMachine",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": null,
+      "id": 4380750320
+    },
+    {
+      "title": "State1",
+      "pos": {
+        "x": 48.0,
+        "y": 102.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": true,
+      "parent_id": 4380750320,
+      "id": 4380750608
+    },
+    {
+      "title": "State2",
+      "pos": {
+        "x": 351.0,
+        "y": 86.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 589.0,
+        "height": 414.0
+      },
+      "node_type": "State",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": 4380750320,
+      "id": 4380750896
+    },
+    {
+      "title": "State3",
+      "pos": {
+        "x": 28.0,
+        "y": 52.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": true,
+      "parent_id": 4380750896,
+      "id": 4380751184
+    },
+    {
+      "title": "State4",
+      "pos": {
+        "x": 239.0,
+        "y": 174.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 315.0,
+        "height": 204.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4380750896,
+      "id": 4380751472
+    },
+    {
+      "title": "State",
+      "pos": {
+        "x": 1057.0,
+        "y": 86.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 758.0,
+        "height": 289.0
+      },
+      "node_type": "State",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": 4380750320,
+      "id": 4380751760
+    },
+    {
+      "title": "State",
+      "pos": {
+        "x": 60.0,
+        "y": 88.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": true,
+      "parent_id": 4380751760,
+      "id": 4380752048
+    },
+    {
+      "title": "State",
+      "pos": {
+        "x": 448.0,
+        "y": 92.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4380751760,
+      "id": 4380752336
+    },
+    {
+      "title": "State",
+      "pos": {
+        "x": 1056.0,
+        "y": 453.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 757.0,
+        "height": 268.0
+      },
+      "node_type": "State",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": 4380750320,
+      "id": 4380752624
+    },
+    {
+      "title": "State",
+      "pos": {
+        "x": 30.0,
+        "y": 54.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 704.0,
+        "height": 189.0
+      },
+      "node_type": "State",
+      "is_container": true,
+      "is_initial": true,
+      "parent_id": 4380752624,
+      "id": 4380752912
+    },
+    {
+      "title": "State",
+      "pos": {
+        "x": 69.0,
+        "y": 56.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4380752912,
+      "id": 4380753200
+    },
+    {
+      "title": "State",
+      "pos": {
+        "x": 446.0,
+        "y": 58.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": true,
+      "parent_id": 4380752912,
+      "id": 4380753488
+    },
+    {
+      "title": "State",
+      "pos": {
+        "x": 31.0,
+        "y": 629.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 691.0,
+        "height": 415.0
+      },
+      "node_type": "State",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": 4380750320,
+      "id": 4380753776
+    },
+    {
+      "title": "State",
+      "pos": {
+        "x": 33.0,
+        "y": 86.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": true,
+      "parent_id": 4380753776,
+      "id": 4380885200
+    },
+    {
+      "title": "State",
+      "pos": {
+        "x": 324.0,
+        "y": 63.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 322.0,
+        "height": 312.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4380753776,
+      "id": 4380885488
+    }
+  ],
+  "edges": [
+    {
+      "start_node_id": 4380750608,
+      "end_node_id": 4380750896,
+      "title": "Edge 3",
+      "waypoint_ratio": 0.5,
+      "start_offset": {
+        "x": 203.5,
+        "y": 88.85901386748844
+      },
+      "end_offset": {
+        "x": -3.5,
+        "y": 104.73726541554959
+      }
+    },
+    {
+      "start_node_id": 4380751184,
+      "end_node_id": 4380751472,
+      "title": "Edge 4",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 203.5,
+        "y": 47.450215561486345
+      },
+      "end_offset": {
+        "x": 178.62553722274367,
+        "y": -3.5
+      }
+    },
+    {
+      "start_node_id": 4380751472,
+      "end_node_id": 4380751184,
+      "title": "Edge 5",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": -3.5,
+        "y": 109.3615923877118
+      },
+      "end_offset": {
+        "x": 82.46257374631273,
+        "y": 103.5
+      }
+    },
+    {
+      "start_node_id": 4380750896,
+      "end_node_id": 4380750608,
+      "title": "Edge 1",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": -3.5,
+        "y": 334.16399021492856
+      },
+      "end_offset": {
+        "x": 160.8511408752911,
+        "y": 103.5
+      }
+    },
+    {
+      "start_node_id": 4380752048,
+      "end_node_id": 4380752336,
+      "title": "Edge 1",
+      "waypoint_ratio": 0.455916955017301,
+      "start_offset": {
+        "x": 203.5,
+        "y": 60.62339418619068
+      },
+      "end_offset": {
+        "x": -3.5,
+        "y": 58.288569867153655
+      }
+    },
+    {
+      "start_node_id": 4380750896,
+      "end_node_id": 4380751760,
+      "title": "Edge 2",
+      "waypoint_ratio": 0.9363636363636364,
+      "start_offset": {
+        "x": 592.5,
+        "y": 134.56492988272458
+      },
+      "end_offset": {
+        "x": -3.5,
+        "y": 133.33993087557604
+      }
+    },
+    {
+      "start_node_id": 4380751760,
+      "end_node_id": 4380752624,
+      "title": "Edge 3",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 121.23595505617982,
+        "y": 292.5
+      },
+      "end_offset": {
+        "x": 123.65356736725744,
+        "y": -3.5
+      }
+    },
+    {
+      "start_node_id": 4380750896,
+      "end_node_id": 4380752624,
+      "title": "Edge 4",
+      "waypoint_ratio": 0.0,
+      "start_offset": {
+        "x": 511.54871807639535,
+        "y": 417.5
+      },
+      "end_offset": {
+        "x": -3.5,
+        "y": 168.6644913979893
+      }
+    },
+    {
+      "start_node_id": 4380753200,
+      "end_node_id": 4380753488,
+      "title": "Edge 5",
+      "waypoint_ratio": 0.4941176470588242,
+      "start_offset": {
+        "x": 203.5,
+        "y": 41.12135818128593
+      },
+      "end_offset": {
+        "x": -3.5,
+        "y": 39.74670768282783
+      }
+    },
+    {
+      "start_node_id": 4380753488,
+      "end_node_id": 4380753200,
+      "title": "Edge 6",
+      "waypoint_ratio": 0.49999999999999933,
+      "start_offset": {
+        "x": -3.5,
+        "y": 80.79061506720221
+      },
+      "end_offset": {
+        "x": 203.5,
+        "y": 83.28048804030959
+      }
+    },
+    {
+      "start_node_id": 4380750896,
+      "end_node_id": 4380753776,
+      "title": "Edge 7",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 95.2389686906946,
+        "y": 417.5
+      },
+      "end_offset": {
+        "x": 414.87997011001676,
+        "y": -3.5
+      }
+    },
+    {
+      "start_node_id": 4380753776,
+      "end_node_id": 4380752624,
+      "title": "Edge 8",
+      "waypoint_ratio": 0.5,
+      "start_offset": {
+        "x": 694.5,
+        "y": 59.15350975752688
+      },
+      "end_offset": {
+        "x": -3.5,
+        "y": 235.01809306520937
+      }
+    },
+    {
+      "start_node_id": 4380885200,
+      "end_node_id": 4380885488,
+      "title": "Edge 9",
+      "waypoint_ratio": 0.44047619047619047,
+      "start_offset": {
+        "x": 203.5,
+        "y": 41.40588129280303
+      },
+      "end_offset": {
+        "x": -3.5,
+        "y": 65.28697749196141
+      }
+    },
+    {
+      "start_node_id": 4380885488,
+      "end_node_id": 4380885200,
+      "title": "Edge 10",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": -3.5,
+        "y": 227.59623893805315
+      },
+      "end_offset": {
+        "x": 80.9023407579889,
+        "y": 103.5
+      }
+    },
+    {
+      "start_node_id": 4380753776,
+      "end_node_id": 4380750608,
+      "title": "Edge 11",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 97.67616556708322,
+        "y": -3.5
+      },
+      "end_offset": {
+        "x": 81.24078764087642,
+        "y": 103.5
+      }
+    },
+    {
+      "start_node_id": 4380752624,
+      "end_node_id": 4380753776,
+      "title": "Edge 12",
+      "waypoint_ratio": 0.0,
+      "start_offset": {
+        "x": 408.1433191646645,
+        "y": 271.5
+      },
+      "end_offset": {
+        "x": 694.5,
+        "y": 278.6934979302066
+      }
+    }
+  ]
+}

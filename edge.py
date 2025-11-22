@@ -43,13 +43,19 @@ class EdgeControlPoint(QGraphicsEllipseItem):
         self.setPos(border_pos)
     
     def mousePressEvent(self, event):
-        """Handle mouse press - start dragging"""
-        # Check if in simulator mode - disable editing
+        """Handle mouse press - start dragging or trigger transition in simulator mode"""
+        # Check if in simulator mode - handle transition instead of dragging
         if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
             view = self.scene().views()[0]
             if hasattr(view, 'window') and hasattr(view.window(), 'simulator_mode'):
-                if view.window().simulator_mode:
-                    event.ignore()
+                main_window = view.window()
+                if main_window.simulator_mode:
+                    # In simulator mode, clicking on control point triggers transition
+                    if event.button() == Qt.LeftButton:
+                        if hasattr(main_window, 'handle_transition_click'):
+                            # Pass the edge to check source and target
+                            main_window.handle_transition_click(self.edge)
+                    event.accept()
                     return
         
         if event.button() == Qt.LeftButton:
@@ -100,6 +106,13 @@ class EdgeControlPoint(QGraphicsEllipseItem):
     def itemChange(self, change, value):
         """Handle item changes"""
         if change == QGraphicsItem.ItemPositionChange:
+            # Block movement in simulator mode
+            if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+                view = self.scene().views()[0]
+                if hasattr(view, 'window') and hasattr(view.window(), 'simulator_mode'):
+                    if view.window().simulator_mode:
+                        return self.pos()  # Return current position to prevent movement
+            
             # Constrain the point to the node's border
             new_pos = value
             
@@ -144,6 +157,14 @@ class EdgeTitleItem(QGraphicsTextItem):
         self.setFlag(QGraphicsItem.ItemIgnoresTransformations, True)
 
     def mouseDoubleClickEvent(self, event):
+        # Check if in simulator mode - disable title editing
+        if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+            view = self.scene().views()[0]
+            if hasattr(view, 'window') and hasattr(view.window(), 'simulator_mode'):
+                if view.window().simulator_mode:
+                    event.ignore()
+                    return
+        
         self._orig_text = self.toPlainText()
         self.setTextInteractionFlags(Qt.TextEditorInteraction)
         self.setFocus(Qt.MouseFocusReason)
@@ -219,13 +240,19 @@ class WaypointControlPoint(QGraphicsEllipseItem):
         self.setZValue(2000)  # Draw above everything, including selected nodes (which use 1000)
     
     def mousePressEvent(self, event):
-        """Handle mouse press - start dragging"""
-        # Check if in simulator mode - disable editing
+        """Handle mouse press - start dragging or trigger transition in simulator mode"""
+        # Check if in simulator mode - handle transition instead of dragging
         if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
             view = self.scene().views()[0]
             if hasattr(view, 'window') and hasattr(view.window(), 'simulator_mode'):
-                if view.window().simulator_mode:
-                    event.ignore()
+                main_window = view.window()
+                if main_window.simulator_mode:
+                    # In simulator mode, clicking on waypoint also triggers transition
+                    if event.button() == Qt.LeftButton:
+                        if hasattr(main_window, 'handle_transition_click'):
+                            # Pass the edge to check source and target
+                            main_window.handle_transition_click(self.edge)
+                    event.accept()
                     return
         
         if event.button() == Qt.LeftButton:
@@ -276,6 +303,13 @@ class WaypointControlPoint(QGraphicsEllipseItem):
     def itemChange(self, change, value):
         """Handle item changes"""
         if change == QGraphicsItem.ItemPositionChange:
+            # Block movement in simulator mode
+            if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+                view = self.scene().views()[0]
+                if hasattr(view, 'window') and hasattr(view.window(), 'simulator_mode'):
+                    if view.window().simulator_mode:
+                        return self.pos()  # Return current position to prevent movement
+            
             # Capture waypoint ratio before movement for undo
             if not hasattr(self, 'ratio_before_move'):
                 self.ratio_before_move = self.edge.waypoint_ratio
@@ -414,7 +448,7 @@ class Edge(QGraphicsPathItem):
         # rather than waiting for the next user interaction to trigger an update.
         self.update_path()
         # Set a default title once the edge is fully connected
-        self._ensure_default_title()
+        self.assign_default_title()
     
     def get_connection_point(self, is_start):
         """Get the connection point for start or end of edge"""
@@ -652,11 +686,11 @@ class Edge(QGraphicsPathItem):
 
         return QPointF(0, 0)
 
-    def _ensure_default_title(self):
-        """Assign a default title like 'Edge N' after connection if empty."""
+    def assign_default_title(self):
+        """Assign a default title like 'EV_N' after connection if empty."""
         if self._start_node is not None and self._end_node is not None:
             if not self.title_item.toPlainText():
-                self.set_title(f"Edge {Edge._title_seq}")
+                self.set_title(f"EV_{Edge._title_seq}")
                 Edge._title_seq += 1
 
     def update_title_position(self):

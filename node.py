@@ -332,9 +332,14 @@ class NodeEditorGraphicsView(QGraphicsView):
                 
     def mousePressEvent(self, event):
         """Handle mouse press events"""
-        # Disable editing in simulator mode
+        # In simulator mode, allow control point clicks for transitions
         if hasattr(self.window(), 'simulator_mode') and self.window().simulator_mode:
-            # Allow selection but no editing
+            item = self.itemAt(event.pos())
+            # Allow EdgeControlPoint clicks for transitions
+            if isinstance(item, (EdgeControlPoint, WaypointControlPoint)):
+                super().mousePressEvent(event)
+                return
+            # For other items, just allow selection
             super().mousePressEvent(event)
             return
         
@@ -481,6 +486,10 @@ class NodeEditorGraphicsView(QGraphicsView):
 
 
 class Node(QGraphicsItem):
+    # Class-level counters for default naming
+    _statemachine_seq = 1
+    _state_seq = 1
+    
     def __init__(self, title="Node", pos=None, parent=None):
         super().__init__(parent)
         self.setFlag(QGraphicsItem.ItemIsMovable)
@@ -558,16 +567,18 @@ class Node(QGraphicsItem):
         if node_type == "StateMachine":
             # Green title background for StateMachine
             self.title_color = QColor("#27ae60")  # Green
-            # Update title
-            self.title = "StateMachine"
-            self.title_item.setPlainText("StateMachine")
+            # Update title with naming convention: StatemachineSm
+            self.title = f"Statemachine{Node._statemachine_seq}Sm"
+            self.title_item.setPlainText(self.title)
+            Node._statemachine_seq += 1
         elif node_type == "State":
             # State title background is 40% darker than the StateMachine's title color
             base_sm = QColor("#27ae60")
             self.title_color = QColor(base_sm).darker(166)
-            # Update title
-            self.title = "State"
-            self.title_item.setPlainText("State")
+            # Update title with naming convention: StateSt
+            self.title = f"State{Node._state_seq}St"
+            self.title_item.setPlainText(self.title)
+            Node._state_seq += 1
         else:
             # Default blue title background
             self.title_color = QColor("#3498db")  # Blue
@@ -762,6 +773,15 @@ class Node(QGraphicsItem):
         if old_width != self.width or old_height != self.height:
             self.update()
             
+            # Update smiley face position if in simulator mode
+            if hasattr(self, '_simulator_smiley'):
+                if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+                    view = self.scene().views()[0]
+                    if hasattr(view, 'window'):
+                        main_window = view.window()
+                        if hasattr(main_window, 'position_smiley_near_initial_dot'):
+                            main_window.position_smiley_near_initial_dot(self)
+            
             # Update parent node's size if this node has a parent
             if self.parent_node and isinstance(self.parent_node, Node):
                 self.parent_node.update_size()
@@ -951,6 +971,14 @@ class Node(QGraphicsItem):
             
     def mouseDoubleClickEvent(self, event):
         """Handle double click events to edit node title"""
+        # Check if in simulator mode - disable title editing
+        if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+            view = self.scene().views()[0]
+            if hasattr(view, 'window') and hasattr(view.window(), 'simulator_mode'):
+                if view.window().simulator_mode:
+                    event.ignore()
+                    return
+        
         # Check if the click was on the title area
         title_rect = QRectF(0, 0, self.width, self.title_height)
         if title_rect.contains(event.pos()):
@@ -1643,6 +1671,13 @@ class NodeEditorWindow(QMainWindow):
             # Disable node movement
             for node in self.nodes:
                 node.setFlag(QGraphicsItem.ItemIsMovable, False)
+            
+            # Disable rubber band selection (drag to select multiple items)
+            self.view.setDragMode(QGraphicsView.NoDrag)
+            
+            # Initialize state machine simulation
+            self.current_state = None
+            self.enter_initial_state()
         else:
             self.simulator_button.setText("Simulator OFF")
             self.statusBar().showMessage("Editor mode enabled", 2000)
@@ -1656,6 +1691,239 @@ class NodeEditorWindow(QMainWindow):
             # Enable node movement
             for node in self.nodes:
                 node.setFlag(QGraphicsItem.ItemIsMovable, True)
+            
+            # Re-enable rubber band selection
+            self.view.setDragMode(QGraphicsView.RubberBandDrag)
+            
+            # Exit simulation - clear current state highlighting
+            if hasattr(self, 'current_state') and self.current_state:
+                self.exit_state(self.current_state)
+                self.current_state = None
+    
+    def enter_initial_state(self):
+        """Enter the initial state when starting simulation"""
+        # Find the top-level StateMachine or initial State
+        initial_state = None
+        
+        # First, look for a StateMachine with an initial state
+        for node in self.nodes:
+            if node.node_type == "StateMachine" and node.is_container and node.child_nodes:
+                # Look for initial state among children
+                for child in node.child_nodes:
+                    if child.node_type == "State" and child.is_initial:
+                        initial_state = child
+                        break
+                if initial_state:
+                    break
+        
+        # If no initial state found in StateMachine, look for top-level initial State
+        if not initial_state:
+            for node in self.nodes:
+                if node.node_type == "State" and node.is_initial and not node.parent_node:
+                    initial_state = node
+                    break
+        
+        # If still no initial state, just pick the first State
+        if not initial_state:
+            for node in self.nodes:
+                if node.node_type == "State":
+                    initial_state = node
+                    break
+        
+        if initial_state:
+            self.enter_state(initial_state)
+        else:
+            self.statusBar().showMessage("No state found to simulate", 2000)
+    
+    def enter_state(self, state):
+        """Enter a state with hierarchical support"""
+        if not state or state.node_type not in ["State", "StateMachine"]:
+            return
+        
+        # Exit current state if any
+        if self.current_state:
+            self.exit_state(self.current_state)
+        
+        # Enter the new state
+        self.current_state = state
+        self.highlight_state(state, True)
+        
+        # Check if this state has children - if so, enter the initial child
+        if state.is_container and state.child_nodes:
+            # Find initial child state
+            initial_child = None
+            for child in state.child_nodes:
+                if child.node_type == "State" and child.is_initial:
+                    initial_child = child
+                    break
+            
+            # If no initial child, take the first State child
+            if not initial_child:
+                for child in state.child_nodes:
+                    if child.node_type == "State":
+                        initial_child = child
+                        break
+            
+            # Recursively enter the child state
+            if initial_child:
+                self.enter_state(initial_child)
+        else:
+            # Leaf state - show status
+            state_path = self.get_state_path(state)
+            self.statusBar().showMessage(f"Current state: {state_path}", 0)
+    
+    def exit_state(self, state):
+        """Exit a state and remove highlighting"""
+        if state:
+            self.highlight_state(state, False)
+    
+    def highlight_state(self, state, active):
+        """Highlight or unhighlight a state"""
+        if active:
+            # Store original border color and set to orange
+            if not hasattr(state, '_original_border_color'):
+                state._original_border_color = state.border_color
+            state.border_color = QColor("#ff8c00")  # Orange
+            state.border_width = 5
+            
+            # Add yellow smiley face
+            from PyQt5.QtWidgets import QGraphicsTextItem
+            smiley = QGraphicsTextItem("😊", state)
+            
+            # Match size with initial dot (15 pixel diameter = 7.5 radius)
+            # Use font size that approximates 15 pixels
+            font = smiley.font()
+            font.setPointSize(12)  # Smaller size to match initial dot
+            smiley.setFont(font)
+            
+            # Set color with 50% transparency
+            color = QColor("#FFD700")  # Gold/yellow color
+            color.setAlpha(120)  # 50% transparent (255 * 0.5 = 127.5)
+            smiley.setDefaultTextColor(color)
+            
+            smiley.setZValue(100)  # Draw on top
+            state._simulator_smiley = smiley
+            
+            # Position 10 pixels left of initial dot position
+            self.position_smiley_near_initial_dot(state)
+        else:
+            # Restore original border color
+            if hasattr(state, '_original_border_color'):
+                state.border_color = state._original_border_color
+                delattr(state, '_original_border_color')
+            state.border_width = 3
+            
+            # Remove smiley face
+            if hasattr(state, '_simulator_smiley'):
+                if state._simulator_smiley.scene():
+                    state._simulator_smiley.scene().removeItem(state._simulator_smiley)
+                delattr(state, '_simulator_smiley')
+        state.update()
+    
+    def position_smiley_near_initial_dot(self, state):
+        """Position smiley face 10 pixels left of where the initial dot would be"""
+        if hasattr(state, '_simulator_smiley'):
+            smiley = state._simulator_smiley
+            
+            # Initial dot position (from Node.paint method)
+            circle_radius = 7.5  # 15 pixel diameter = 7.5 pixel radius
+            margin = state.title_height / 2  # Half of title bar height
+            dot_x = state.width - margin  # Equal distance from right edge
+            dot_y = margin  # Equal distance from top edge
+            
+            # Get smiley dimensions
+            smiley_rect = smiley.boundingRect()
+            
+            # Position smiley 10 pixels to the left of the dot, vertically centered with dot
+            x = dot_x - 10 - smiley_rect.width()
+            y = dot_y - smiley_rect.height() / 2
+            
+            smiley.setPos(x, y)
+    
+    def get_state_path(self, state):
+        """Get the hierarchical path of a state"""
+        path = []
+        current = state
+        while current:
+            path.insert(0, current.title)
+            current = current.parent_node if hasattr(current, 'parent_node') else None
+        return " → ".join(path)
+    
+    def transition_to_state(self, target_state):
+        """Transition from current state to target state"""
+        if not target_state or target_state.node_type not in ["State", "StateMachine"]:
+            return
+        
+        # Check if we're already inside the target state's hierarchy
+        if self.is_inside_state(self.current_state, target_state):
+            # Already inside this state, no transition needed
+            self.statusBar().showMessage(f"Already inside {target_state.title}", 2000)
+            return
+        
+        self.enter_state(target_state)
+    
+    def is_inside_state(self, current, target):
+        """Check if current state is inside the target state's hierarchy"""
+        if not current or not target:
+            return False
+        
+        # Walk up the parent chain from current state
+        node = current
+        while node:
+            if node == target:
+                return True
+            node = node.parent_node if hasattr(node, 'parent_node') else None
+        
+        return False
+    
+    def handle_transition_click(self, edge):
+        """Handle clicking on an edge control point to trigger a transition"""
+        if not self.simulator_mode:
+            return
+        
+        # Get source and target nodes from the edge
+        from edge import Edge
+        if not isinstance(edge, Edge):
+            return
+        
+        source_node = edge._start_node
+        target_node = edge._end_node
+        
+        if not source_node or not target_node:
+            self.statusBar().showMessage("Invalid transition", 2000)
+            return
+        
+        # Check if target is a State or StateMachine
+        if target_node.node_type not in ["State", "StateMachine"]:
+            self.statusBar().showMessage("Target is not a state", 2000)
+            return
+        
+        # Validate that the transition is valid from current state
+        if not self.is_transition_valid(source_node):
+            edge_title = edge.title_item.toPlainText() if hasattr(edge, 'title_item') else "this edge"
+            self.statusBar().showMessage(f"Cannot trigger {edge_title} - not in source state", 2000)
+            return
+        
+        # Transition is valid, execute it
+        self.transition_to_state(target_node)
+    
+    def is_transition_valid(self, source_node):
+        """Check if a transition from source_node is valid given current state"""
+        if not self.current_state or not source_node:
+            return False
+        
+        # The transition is valid if:
+        # 1. We are exactly in the source state, OR
+        # 2. We are in a descendant of the source state (child, grandchild, etc.)
+        
+        # Check if current state is the source or a descendant of source
+        node = self.current_state
+        while node:
+            if node == source_node:
+                return True
+            node = node.parent_node if hasattr(node, 'parent_node') else None
+        
+        return False
     
     def record_node_movement(self, node, old_pos, new_pos):
         """Record a node movement for undo functionality"""
