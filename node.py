@@ -5,7 +5,7 @@ from PyQt5.QtWidgets import (QApplication, QGraphicsView, QGraphicsScene,
                              QMainWindow, QVBoxLayout, QWidget, QGraphicsItem,
                              QGraphicsRectItem, QGraphicsTextItem, QGraphicsPathItem,
                              QGraphicsEllipseItem, QMenu, QAction, QLineEdit, QSizePolicy,
-                             QFileDialog, QMessageBox)
+                             QFileDialog, QMessageBox, QPushButton)
 from PyQt5.QtCore import Qt, QRectF, QPointF, QSizeF, QByteArray, QTimer, QPropertyAnimation, pyqtProperty
 from PyQt5.QtGui import QPainter, QPen, QColor, QWheelEvent, QBrush, QFont, QPainterPath, QIcon, QPixmap
 from PyQt5.QtSvg import QSvgRenderer
@@ -221,7 +221,12 @@ class NodeEditorGraphicsView(QGraphicsView):
         super().keyPressEvent(event)
     
     def contextMenuEvent(self, event):
-        """Handle context menu events"""
+        """Handle context menu (right-click) events"""
+        # Disable context menu in simulator mode
+        if hasattr(self.window(), 'simulator_mode') and self.window().simulator_mode:
+            event.ignore()
+            return
+        
         item = self.itemAt(event.pos())
         # If an edge, edge title, or its control points are under the cursor, delegate to the item's context menu
         if isinstance(item, (Edge, EdgeControlPoint, WaypointControlPoint, EdgeTitleItem)):
@@ -327,6 +332,12 @@ class NodeEditorGraphicsView(QGraphicsView):
                 
     def mousePressEvent(self, event):
         """Handle mouse press events"""
+        # Disable editing in simulator mode
+        if hasattr(self.window(), 'simulator_mode') and self.window().simulator_mode:
+            # Allow selection but no editing
+            super().mousePressEvent(event)
+            return
+        
         if event.button() == Qt.RightButton:
             super().mousePressEvent(event)
             return
@@ -830,6 +841,14 @@ class Node(QGraphicsItem):
     
     def mousePressEvent(self, event):
         """Handle mouse press events for resizing and dot marking"""
+        # Check if in simulator mode - disable all editing
+        if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+            view = self.scene().views()[0]
+            if hasattr(view, 'window') and hasattr(view.window(), 'simulator_mode'):
+                if view.window().simulator_mode:
+                    event.ignore()
+                    return
+        
         try:
             if event.button() == Qt.LeftButton:
                 # Capture position before any movement for undo functionality (do this for all left clicks)
@@ -1404,52 +1423,52 @@ class NodeEditorWindow(QMainWindow):
         left_spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         toolbar.addWidget(left_spacer)
         
-        # Add node type buttons
-        statemachine_action = toolbar.addAction("StateMachine")
-        statemachine_action.setToolTip("Apply StateMachine type to selected node")
-        statemachine_action.triggered.connect(lambda: self.apply_node_type("StateMachine"))
+        # Add node type buttons (store as instance variables for enabling/disabling)
+        self.statemachine_action = toolbar.addAction("StateMachine")
+        self.statemachine_action.setToolTip("Apply StateMachine type to selected node")
+        self.statemachine_action.triggered.connect(lambda: self.apply_node_type("StateMachine"))
         
-        state_action = toolbar.addAction("State")
-        state_action.setToolTip("Apply State type to selected node")
-        state_action.triggered.connect(lambda: self.apply_node_type("State"))
+        self.state_action = toolbar.addAction("State")
+        self.state_action.setToolTip("Apply State type to selected node")
+        self.state_action.triggered.connect(lambda: self.apply_node_type("State"))
 
         # Set icons for StateMachine and State actions (SVG-based for crisp scaling) with labels
         sm_hex = "#27ae60"  # base StateMachine title color
         sm_qc = QColor(sm_hex)
         # 40% darker => factor ≈ 166 (since QColor.darker(200) => 50% darker)
         st_qc = QColor(sm_qc).darker(166)
-        statemachine_action.setIcon(self.make_state_node_svg_icon(24, title_color=sm_hex, label="M"))
-        state_action.setIcon(self.make_state_node_svg_icon(24, title_color=st_qc.name(), label="S"))
+        self.statemachine_action.setIcon(self.make_state_node_svg_icon(24, title_color=sm_hex, label="M"))
+        self.state_action.setIcon(self.make_state_node_svg_icon(24, title_color=st_qc.name(), label="S"))
         
         toolbar.addSeparator()
         
         # Add Initial button to mark State nodes as initial
-        initial_action = toolbar.addAction("Initial")
-        initial_action.setToolTip("Mark selected State node as initial")
-        initial_action.setIcon(self.make_initial_state_svg_icon(24))
-        initial_action.triggered.connect(self.mark_as_initial)
+        self.initial_action = toolbar.addAction("Initial")
+        self.initial_action.setToolTip("Mark selected State node as initial")
+        self.initial_action.setIcon(self.make_initial_state_svg_icon(24))
+        self.initial_action.triggered.connect(self.mark_as_initial)
         
         toolbar.addSeparator()
         
         # Undo/Redo actions with custom icons
-        undo_action = toolbar.addAction("Undo")
-        undo_action.setToolTip("Undo last action")
-        undo_action.setIcon(self.make_undo_svg_icon(24))
-        undo_action.triggered.connect(self.undo_action)
-        undo_action.setShortcut("Ctrl+Z")
+        self.undo_action = toolbar.addAction("Undo")
+        self.undo_action.setToolTip("Undo last action")
+        self.undo_action.setIcon(self.make_undo_svg_icon(24))
+        self.undo_action.triggered.connect(self.undo_action_method)
+        self.undo_action.setShortcut("Ctrl+Z")
 
-        redo_action = toolbar.addAction("Redo")
-        redo_action.setToolTip("Redo last undone action")
-        redo_action.setIcon(self.make_redo_svg_icon(24))
-        redo_action.triggered.connect(self.redo_action)
-        redo_action.setShortcut("Ctrl+Y")
+        self.redo_action = toolbar.addAction("Redo")
+        self.redo_action.setToolTip("Redo last undone action")
+        self.redo_action.setIcon(self.make_redo_svg_icon(24))
+        self.redo_action.triggered.connect(self.redo_action_method)
+        self.redo_action.setShortcut("Ctrl+Y")
         
         # Delete selected items action with custom red cross icon (SVG)
-        delete_action = toolbar.addAction("Delete")
-        delete_action.setToolTip("Delete selected items")
-        delete_action.setIcon(self.make_red_cross_svg_icon(24))
-        delete_action.triggered.connect(self.delete_selected_items)
-        delete_action.setShortcut("Delete")  # Primary shortcut
+        self.delete_action = toolbar.addAction("Delete")
+        self.delete_action.setToolTip("Delete selected items")
+        self.delete_action.setIcon(self.make_red_cross_svg_icon(24))
+        self.delete_action.triggered.connect(self.delete_selected_items)
+        self.delete_action.setShortcut("Delete")  # Primary shortcut
         
         # Add Backspace as an alternative shortcut
         from PyQt5.QtWidgets import QShortcut
@@ -1461,6 +1480,35 @@ class NodeEditorWindow(QMainWindow):
         right_spacer = QWidget()
         right_spacer.setSizePolicy(QSizePolicy.Expanding, QSizePolicy.Preferred)
         toolbar.addWidget(right_spacer)
+        
+        # Add Simulator toggle button on the right side
+        toolbar.addSeparator()
+        self.simulator_mode = False
+        self.simulator_button = QPushButton("Simulator OFF")
+        self.simulator_button.setCheckable(True)
+        self.simulator_button.setChecked(False)
+        self.simulator_button.setFixedWidth(110)  # Fixed width to prevent resizing
+        self.simulator_button.setToolTip("Toggle Simulator mode")
+        self.simulator_button.setStyleSheet("""
+            QPushButton {
+                background-color: #e74c3c;
+                color: white;
+                border: none;
+                padding: 5px 10px;
+                font-weight: bold;
+                border-radius: 3px;
+                min-width: 110px;
+                max-width: 110px;
+            }
+            QPushButton:checked {
+                background-color: #27ae60;
+            }
+            QPushButton:hover {
+                opacity: 0.8;
+            }
+        """)
+        self.simulator_button.clicked.connect(self.toggle_simulator_mode)
+        toolbar.addWidget(self.simulator_button)
         
         # Create a central widget and layout
         central_widget = QWidget()
@@ -1577,6 +1625,37 @@ class NodeEditorWindow(QMainWindow):
             self.statusBar().showMessage(f"Toggled initial state for {marked_count} State node(s). {non_state_count} non-State node(s) ignored")
         else:
             self.statusBar().showMessage("No State nodes selected. Only State nodes can be marked as initial")
+    
+    def toggle_simulator_mode(self):
+        """Toggle between Editor and Simulator mode"""
+        self.simulator_mode = self.simulator_button.isChecked()
+        
+        if self.simulator_mode:
+            self.simulator_button.setText("Simulator ON")
+            self.statusBar().showMessage("Simulator mode enabled - Editing disabled", 2000)
+            # Disable all editing actions
+            self.statemachine_action.setEnabled(False)
+            self.state_action.setEnabled(False)
+            self.initial_action.setEnabled(False)
+            self.undo_action.setEnabled(False)
+            self.redo_action.setEnabled(False)
+            self.delete_action.setEnabled(False)
+            # Disable node movement
+            for node in self.nodes:
+                node.setFlag(QGraphicsItem.ItemIsMovable, False)
+        else:
+            self.simulator_button.setText("Simulator OFF")
+            self.statusBar().showMessage("Editor mode enabled", 2000)
+            # Enable all editing actions
+            self.statemachine_action.setEnabled(True)
+            self.state_action.setEnabled(True)
+            self.initial_action.setEnabled(True)
+            self.undo_action.setEnabled(True)
+            self.redo_action.setEnabled(True)
+            self.delete_action.setEnabled(True)
+            # Enable node movement
+            for node in self.nodes:
+                node.setFlag(QGraphicsItem.ItemIsMovable, True)
     
     def record_node_movement(self, node, old_pos, new_pos):
         """Record a node movement for undo functionality"""
@@ -1791,7 +1870,7 @@ class NodeEditorWindow(QMainWindow):
         if hasattr(self, 'redo_stack'):
             self.redo_stack.clear()
     
-    def undo_action(self):
+    def undo_action_method(self):
         """Undo the last action"""
         if not self.undo_stack:
             self.statusBar().showMessage("Nothing to undo", 2000)
@@ -1802,7 +1881,7 @@ class NodeEditorWindow(QMainWindow):
             # Remove invalid action and try next one
             self.undo_stack.pop()
             self.statusBar().showMessage("Cannot undo: References deleted items", 2000)
-            self.undo_action()
+            self.undo_action_method()
             return
         
         # Get the last action from the stack
@@ -2263,7 +2342,7 @@ class NodeEditorWindow(QMainWindow):
                 self.action_monitor.add_action_type('undo', QColor("#9B59B6"), 300)  # Purple
             self.action_monitor.signal_action('undo')
 
-    def redo_action(self):
+    def redo_action_method(self):
         """Redo the last undone action"""
         if not hasattr(self, 'redo_stack') or not self.redo_stack:
             self.statusBar().showMessage("Nothing to redo", 2000)
@@ -2530,6 +2609,11 @@ class NodeEditorWindow(QMainWindow):
     
     def delete_selected_items(self):
         """Delete all selected items (nodes and edges)"""
+        # Prevent deletion in simulator mode
+        if self.simulator_mode:
+            self.statusBar().showMessage("Cannot delete in Simulator mode", 2000)
+            return
+        
         from edge import Edge
         
         selected_items = self.scene.selectedItems()

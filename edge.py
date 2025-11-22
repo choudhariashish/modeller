@@ -44,6 +44,14 @@ class EdgeControlPoint(QGraphicsEllipseItem):
     
     def mousePressEvent(self, event):
         """Handle mouse press - start dragging"""
+        # Check if in simulator mode - disable editing
+        if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+            view = self.scene().views()[0]
+            if hasattr(view, 'window') and hasattr(view.window(), 'simulator_mode'):
+                if view.window().simulator_mode:
+                    event.ignore()
+                    return
+        
         if event.button() == Qt.LeftButton:
             self.is_dragging = True
             self.offset_before_drag = QPointF(self.offset)
@@ -158,6 +166,14 @@ class EdgeTitleItem(QGraphicsTextItem):
         super().focusOutEvent(event)
 
     def mousePressEvent(self, event):
+        # Check if in simulator mode - disable editing
+        if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+            view = self.scene().views()[0]
+            if hasattr(view, 'window') and hasattr(view.window(), 'simulator_mode'):
+                if view.window().simulator_mode:
+                    event.ignore()
+                    return
+        
         # Ensure we receive focus on click to allow editing
         self.setFocus(Qt.MouseFocusReason)
         event.accept()
@@ -204,6 +220,14 @@ class WaypointControlPoint(QGraphicsEllipseItem):
     
     def mousePressEvent(self, event):
         """Handle mouse press - start dragging"""
+        # Check if in simulator mode - disable editing
+        if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+            view = self.scene().views()[0]
+            if hasattr(view, 'window') and hasattr(view.window(), 'simulator_mode'):
+                if view.window().simulator_mode:
+                    event.ignore()
+                    return
+        
         if event.button() == Qt.LeftButton:
             self.is_dragging = True
             self.ratio_before_drag = self.edge.waypoint_ratio
@@ -653,11 +677,27 @@ class Edge(QGraphicsPathItem):
     
     def mousePressEvent(self, event):
         """Handle mouse press to set focus"""
+        # Check if in simulator mode - disable editing
+        if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+            view = self.scene().views()[0]
+            if hasattr(view, 'window') and hasattr(view.window(), 'simulator_mode'):
+                if view.window().simulator_mode:
+                    event.ignore()
+                    return
+        
         self.setFocus()
         super().mousePressEvent(event)
     
     def contextMenuEvent(self, event):
         """Handle right-click context menu on edge"""
+        # Disable context menu in simulator mode
+        if self.scene() and hasattr(self.scene(), 'views') and self.scene().views():
+            view = self.scene().views()[0]
+            if hasattr(view, 'window') and hasattr(view.window(), 'simulator_mode'):
+                if view.window().simulator_mode:
+                    event.ignore()
+                    return
+        
         from PyQt5.QtWidgets import QMenu, QInputDialog
         menu = QMenu()
         edit_title_action = menu.addAction("Edit Title…")
