@@ -1790,10 +1790,10 @@ class NodeEditorWindow(QMainWindow):
             from PyQt5.QtWidgets import QGraphicsTextItem
             smiley = QGraphicsTextItem("😊", state)
             
-            # Match size with initial dot (15 pixel diameter = 7.5 radius)
-            # Use font size that approximates 15 pixels
+            # Increase size by 30% from original 12pt
+            # 12pt * 1.30 = 15.6pt, rounded to 16pt
             font = smiley.font()
-            font.setPointSize(12)  # Smaller size to match initial dot
+            font.setPointSize(16)  # 30% larger than original 12pt
             smiley.setFont(font)
             
             # Set color with 50% transparency
@@ -1825,17 +1825,24 @@ class NodeEditorWindow(QMainWindow):
         if hasattr(state, '_simulator_smiley'):
             smiley = state._simulator_smiley
             
+            # Dynamically get current node dimensions from bounding rect
+            # This ensures we always use the actual current size, not cached values
+            state_rect = state.boundingRect()
+            current_width = state_rect.width()
+            current_height = state_rect.height()
+            current_title_height = state.title_height
+            
             # Initial dot position (from Node.paint method)
             circle_radius = 7.5  # 15 pixel diameter = 7.5 pixel radius
-            margin = state.title_height / 2  # Half of title bar height
-            dot_x = state.width - margin  # Equal distance from right edge
+            margin = current_title_height / 2  # Half of title bar height
+            dot_x = current_width - margin  # Equal distance from right edge
             dot_y = margin  # Equal distance from top edge
             
             # Get smiley dimensions
             smiley_rect = smiley.boundingRect()
             
-            # Position smiley 10 pixels to the left of the dot, vertically centered with dot
-            x = dot_x - 10 - smiley_rect.width()
+            # Position smiley 30 pixels to the left of the dot (10 + 20 extra), vertically centered with dot
+            x = dot_x - 30 - smiley_rect.width()
             y = dot_y - smiley_rect.height() / 2
             
             smiley.setPos(x, y)
