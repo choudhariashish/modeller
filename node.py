@@ -1418,7 +1418,8 @@ class NodeEditorWindow(QMainWindow):
     
     def initUI(self):
         # Set window properties
-        self.setWindowTitle("The Modeller")
+        from version import __version__
+        self.setWindowTitle(f"The Modeller v{__version__}")
         self.setGeometry(100, 100, 1200, 800)
         
         # Create toolbar
@@ -3464,12 +3465,13 @@ class NodeEditorWindow(QMainWindow):
     
     def update_window_title(self):
         """Update the window title to show the current file name"""
+        from version import __version__
         if self.current_file:
             import os
             filename = os.path.basename(self.current_file)
-            self.setWindowTitle(f"The Modeller - {filename}")
+            self.setWindowTitle(f"The Modeller v{__version__} - {filename}")
         else:
-            self.setWindowTitle("The Modeller")
+            self.setWindowTitle(f"The Modeller v{__version__}")
         
     def show_context_menu(self, pos):
         """Show the context menu for nodes"""

@@ -1,8 +1,10 @@
-# Modeller - Node Editor
+# The Modeller - Hierarchical State Machine Editor
 
-AI powered software modeling tool with code generation capabilities.
+**Version 1.0.0**
 
-A PyQt5-based node editor application with orthogonal edge routing and interactive edge manipulation.
+AI powered software modeling tool with hierarchical state machine simulation and code generation capabilities.
+
+A PyQt5-based state machine editor with orthogonal edge routing, interactive manipulation, and complete simulation mode.
 
 ## Features
 
@@ -54,13 +56,41 @@ A PyQt5-based node editor application with orthogonal edge routing and interacti
 - Undo stack size: 50 actions
 - Redo stack automatically managed
 
+### Simulator Mode (NEW in v1.0.0)
+- **Toggle Simulator ON/OFF** via toolbar button
+- **Hierarchical state machine execution**:
+  - Automatic initial state detection and entry
+  - Recursive child state entry (enters initial child of containers)
+  - State transition validation (source and hierarchy checks)
+  - Click edge control points (orange or blue dots) to trigger transitions
+- **Visual feedback**:
+  - Active state: 5px orange border
+  - Yellow smiley face (😊) indicator on active state
+  - State path display in status bar (e.g., "StateMachine → State2 → State4")
+- **Complete read-only protection**:
+  - All editing disabled (no create/delete/move/resize)
+  - No title editing, no edge adjustments
+  - No rubber band selection
+  - Context menus disabled
+- **Transition guards**:
+  - Only allows transitions from current state or ancestors
+  - Prevents invalid transitions with informative messages
+  - Blocks transitions to states already in hierarchy
+
+### Naming Conventions
+- **Edges**: EV_1, EV_2, EV_3, ... (Event naming)
+- **States**: State1St, State2St, State3St, ...
+- **StateMachines**: Statemachine1Sm, Statemachine2Sm, ...
+- Sequential numbering with type suffixes
+
 ### UI Features
 - Zoom in/out with mouse wheel
 - Pan around the canvas
-- Toolbar with delete button
+- Toolbar with delete button and simulator toggle
 - Keyboard shortcuts (Delete/Backspace for deletion)
 - Modern UI with Fusion style
 - Grid background with major/minor lines
+- Color-coded node types (green for StateMachine, darker green for State)
 
 ## Requirements
 - Python 3.6+
@@ -131,6 +161,24 @@ python main.py
 #### Deletion
 - **Delete/Backspace**: Delete selected items
 - **Toolbar Delete Button**: Delete selected items
+
+#### Simulator Mode
+- **Simulator ON/OFF Button**: Toggle between editor and simulator modes
+- **In Simulator Mode**:
+  - Click on edge dots (orange or blue) to trigger state transitions
+  - View current state path in status bar
+  - Active state shows orange border and yellow smiley face
+  - All editing is disabled
+
+## Version History
+
+### Version 1.0.0 (2025-11-21)
+- Initial release with complete hierarchical state machine modeling
+- Full simulator mode with state transition validation
+- Undo/Redo support for all operations
+- JSON import/export
+- Modern UI with toolbar and keyboard shortcuts
+- Automatic naming conventions for edges and states
 
 ## License
 MIT
