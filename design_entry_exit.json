@@ -1,0 +1,420 @@
+{
+  "nodes": [
+    {
+      "title": "Statemachine3Sm",
+      "pos": {
+        "x": -842.0,
+        "y": -313.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 1788.0,
+        "height": 1014.0
+      },
+      "node_type": "StateMachine",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": null,
+      "id": 5023326272
+    },
+    {
+      "title": "Entry",
+      "pos": {
+        "x": 10.0,
+        "y": 40.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 100.0,
+        "height": 60.0
+      },
+      "node_type": "Entry",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 5023326272,
+      "id": 5023328432
+    },
+    {
+      "title": "Exit",
+      "pos": {
+        "x": 1671.0,
+        "y": 40.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 100.0,
+        "height": 60.0
+      },
+      "node_type": "Exit",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 5023326272,
+      "id": 5023334608
+    },
+    {
+      "title": "State10St",
+      "pos": {
+        "x": 142.0,
+        "y": 84.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 1230.0,
+        "height": 867.0
+      },
+      "node_type": "State",
+      "is_container": true,
+      "is_initial": true,
+      "parent_id": 5023326272,
+      "id": 5023336624
+    },
+    {
+      "title": "State12St",
+      "pos": {
+        "x": 71.0,
+        "y": 157.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 582.0,
+        "height": 450.0
+      },
+      "node_type": "State",
+      "is_container": true,
+      "is_initial": true,
+      "parent_id": 5023336624,
+      "id": 5023347472
+    },
+    {
+      "title": "State14St",
+      "pos": {
+        "x": 60.0,
+        "y": 137.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": true,
+      "parent_id": 5023347472,
+      "id": 5023381248
+    },
+    {
+      "title": "Entry",
+      "pos": {
+        "x": 10.0,
+        "y": 40.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 100.0,
+        "height": 60.0
+      },
+      "node_type": "Entry",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 5023347472,
+      "id": 5023382976
+    },
+    {
+      "title": "Exit",
+      "pos": {
+        "x": 465.0,
+        "y": 40.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 100.0,
+        "height": 60.0
+      },
+      "node_type": "Exit",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 5023347472,
+      "id": 5023323904
+    },
+    {
+      "title": "State15St",
+      "pos": {
+        "x": 322.0,
+        "y": 224.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 5023347472,
+      "id": 5023383616
+    },
+    {
+      "title": "State16St",
+      "pos": {
+        "x": 62.0,
+        "y": 317.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 5023347472,
+      "id": 5023386640
+    },
+    {
+      "title": "State13St",
+      "pos": {
+        "x": 735.0,
+        "y": 331.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 435.0,
+        "height": 473.0
+      },
+      "node_type": "State",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": 5023336624,
+      "id": 5023349776
+    },
+    {
+      "title": "State17St",
+      "pos": {
+        "x": 59.0,
+        "y": 87.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": true,
+      "parent_id": 5023349776,
+      "id": 5023403168
+    },
+    {
+      "title": "State18St",
+      "pos": {
+        "x": 166.0,
+        "y": 280.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 5023349776,
+      "id": 5023409632
+    },
+    {
+      "title": "Entry",
+      "pos": {
+        "x": 10.0,
+        "y": 40.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 100.0,
+        "height": 60.0
+      },
+      "node_type": "Entry",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 5023336624,
+      "id": 5023362640
+    },
+    {
+      "title": "Exit",
+      "pos": {
+        "x": 1113.0,
+        "y": 40.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 100.0,
+        "height": 60.0
+      },
+      "node_type": "Exit",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 5023336624,
+      "id": 5023373200
+    },
+    {
+      "title": "State11St",
+      "pos": {
+        "x": 1424.0,
+        "y": 315.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 315.0,
+        "height": 437.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 5023326272,
+      "id": 5023346896
+    }
+  ],
+  "edges": [
+    {
+      "start_node_id": 5023336624,
+      "end_node_id": 5023346896,
+      "title": "EV_1",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 1233.5,
+        "y": 94.81967950351986
+      },
+      "end_offset": {
+        "x": 156.39702623785956,
+        "y": -3.5
+      }
+    },
+    {
+      "start_node_id": 5023346896,
+      "end_node_id": 5023336624,
+      "title": "EV_2",
+      "waypoint_ratio": 0.0,
+      "start_offset": {
+        "x": 160.76909758630038,
+        "y": 440.5
+      },
+      "end_offset": {
+        "x": 1233.5,
+        "y": 803.0777500115664
+      }
+    },
+    {
+      "start_node_id": 5023347472,
+      "end_node_id": 5023349776,
+      "title": "EV_3",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 585.5,
+        "y": 67.68514927338455
+      },
+      "end_offset": {
+        "x": 215.46911535223956,
+        "y": -3.5
+      }
+    },
+    {
+      "start_node_id": 5023349776,
+      "end_node_id": 5023347472,
+      "title": "EV_4",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": -3.5,
+        "y": 390.73288733759944
+      },
+      "end_offset": {
+        "x": 277.2567862207516,
+        "y": 453.5
+      }
+    },
+    {
+      "start_node_id": 5023381248,
+      "end_node_id": 5023383616,
+      "title": "EV_5",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 203.5,
+        "y": 27.371890547263675
+      },
+      "end_offset": {
+        "x": 110.81990863978442,
+        "y": -3.5
+      }
+    },
+    {
+      "start_node_id": 5023383616,
+      "end_node_id": 5023386640,
+      "title": "EV_6",
+      "waypoint_ratio": 0.0,
+      "start_offset": {
+        "x": 112.05761685106185,
+        "y": 103.5
+      },
+      "end_offset": {
+        "x": 203.5,
+        "y": 68.69235042383343
+      }
+    },
+    {
+      "start_node_id": 5023386640,
+      "end_node_id": 5023381248,
+      "title": "EV_7",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 76.27391304347827,
+        "y": -3.5
+      },
+      "end_offset": {
+        "x": 79.66923076923081,
+        "y": 103.5
+      }
+    },
+    {
+      "start_node_id": 5023403168,
+      "end_node_id": 5023409632,
+      "title": "EV_8",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 203.5,
+        "y": 51.41627061337755
+      },
+      "end_offset": {
+        "x": 172.6468997086974,
+        "y": -3.5
+      }
+    },
+    {
+      "start_node_id": 5023409632,
+      "end_node_id": 5023403168,
+      "title": "EV_9",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": -3.5,
+        "y": 59.204902150745966
+      },
+      "end_offset": {
+        "x": 40.83081333081333,
+        "y": 103.5
+      }
+    }
+  ]
+}

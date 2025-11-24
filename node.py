@@ -11,6 +11,45 @@ from PyQt5.QtGui import QPainter, QPen, QColor, QWheelEvent, QBrush, QFont, QPai
 from PyQt5.QtSvg import QSvgRenderer
 from edge import Edge, EdgeControlPoint, WaypointControlPoint, EdgeTitleItem
 
+# ============================================================================
+# NODE TYPE COLOR DEFINITIONS
+# ============================================================================
+# Define colors for all node types in one place for easy modification
+
+# StateMachine node colors
+COLOR_STATEMACHINE = "#9999ff"  # Green
+
+# State node colors (40% darker than StateMachine)
+COLOR_STATE = "#4d4dff"  # Dark Green (calculated as QColor("#27ae60").darker(166))
+
+# Entry node colors
+COLOR_ENTRY = "#5c5c8a"  # Orange
+
+# Exit node colors
+COLOR_EXIT = "#3d3d5c"  # Red
+
+# Default node colors
+COLOR_DEFAULT = "#3498db"  # Blue
+
+# Border color for all nodes
+COLOR_BORDER = "#747574"  # Neutral gray
+
+# Background opacity for container area (0-255, lower = more transparent)
+CONTAINER_BG_OPACITY = 5  # Very subtle background (was 10, now 50% more transparent)
+
+# Background color for the scene
+COLOR_BACKGROUND = "#1a1a1a"  # Black background
+
+# Grid colors
+COLOR_GRID_MINOR = "#2a2a2a"  # Dark gray for minor grid lines
+COLOR_GRID_MAJOR = "#343432"  # Lighter gray for major grid lines
+
+# Grid line widths
+GRID_MINOR_WIDTH = 1  # Width of minor grid lines
+GRID_MAJOR_WIDTH = 2  # Width of major grid lines (thicker for visibility)
+
+# ============================================================================
+
 
 class UserActionSignalDot(QWidget):
     """A widget that displays a colored dot in the status bar to signal user actions"""
@@ -138,11 +177,11 @@ class NodeEditorGraphicsView(QGraphicsView):
     def drawBackground(self, painter, rect):
         """Draw the background grid"""
         # Fill the background with the specified color
-        painter.fillRect(rect, QColor("#292826"))
+        painter.fillRect(rect, QColor(COLOR_BACKGROUND))
         
-        # Set up the pen for minor grid lines (10% darker)
-        minor_pen = QPen(QColor("#424241"))  # Slightly darker gray with transparency
-        minor_pen.setWidth(1)
+        # Set up the pen for minor grid lines
+        minor_pen = QPen(QColor(COLOR_GRID_MINOR))
+        minor_pen.setWidth(GRID_MINOR_WIDTH)
         painter.setPen(minor_pen)
         
         # Calculate the visible area in scene coordinates
@@ -169,9 +208,9 @@ class NodeEditorGraphicsView(QGraphicsView):
                            QPointF(view_rect.right() + margin, y))
             y += self.grid_size
             
-        # Draw major grid lines (10% darker)
-        major_pen = QPen(QColor("#424241"))  # Slightly darker gray
-        major_pen.setWidth(1)
+        # Draw major grid lines (thicker and lighter for visibility)
+        major_pen = QPen(QColor(COLOR_GRID_MAJOR))
+        major_pen.setWidth(GRID_MAJOR_WIDTH)
         painter.setPen(major_pen)
         
         major_grid_size = self.grid_size * self.grid_squares
@@ -489,6 +528,8 @@ class Node(QGraphicsItem):
     # Class-level counters for default naming
     _statemachine_seq = 1
     _state_seq = 1
+    _entry_seq = 1
+    _exit_seq = 1
     
     def __init__(self, title="Node", pos=None, parent=None):
         super().__init__(parent)
@@ -566,25 +607,48 @@ class Node(QGraphicsItem):
         
         if node_type == "StateMachine":
             # Green title background for StateMachine
-            self.title_color = QColor("#27ae60")  # Green
+            self.title_color = QColor(COLOR_STATEMACHINE)
             # Update title with naming convention: StatemachineSm
             self.title = f"Statemachine{Node._statemachine_seq}Sm"
             self.title_item.setPlainText(self.title)
             Node._statemachine_seq += 1
         elif node_type == "State":
             # State title background is 40% darker than the StateMachine's title color
-            base_sm = QColor("#27ae60")
-            self.title_color = QColor(base_sm).darker(166)
+            self.title_color = QColor(COLOR_STATE)
             # Update title with naming convention: StateSt
             self.title = f"State{Node._state_seq}St"
             self.title_item.setPlainText(self.title)
             Node._state_seq += 1
+        elif node_type == "Entry":
+            # Orange title background for Entry
+            self.title_color = QColor(COLOR_ENTRY)
+            # Entry nodes always have the title "Entry"
+            self.title = "Entry"
+            self.title_item.setPlainText(self.title)
+            # Make Entry nodes smaller
+            self.min_width = 100
+            self.min_height = 60
+            self.width = 100
+            self.height = 60
+            self.update_size()
+        elif node_type == "Exit":
+            # Red title background for Exit
+            self.title_color = QColor(COLOR_EXIT)
+            # Exit nodes always have the title "Exit"
+            self.title = "Exit"
+            self.title_item.setPlainText(self.title)
+            # Make Exit nodes smaller (same as Entry)
+            self.min_width = 100
+            self.min_height = 60
+            self.width = 100
+            self.height = 60
+            self.update_size()
         else:
             # Default blue title background
-            self.title_color = QColor("#3498db")  # Blue
+            self.title_color = QColor(COLOR_DEFAULT)
         
         # Keep border consistent neutral for all types
-        self.border_color = QColor("#747574")
+        self.border_color = QColor(COLOR_BORDER)
         
         # Force redraw
         self.update()
@@ -618,16 +682,28 @@ class Node(QGraphicsItem):
         
         # Update child nodes if any
         for child in self.child_nodes:
-            # Make sure children stay within bounds
-            child_pos = child.pos()
-            max_x = self.inner_rect.width() - child.boundingRect().width()
-            max_y = self.inner_rect.height() - child.boundingRect().height()
-            
-            new_x = max(0, min(child_pos.x(), max_x))
-            new_y = max(0, min(child_pos.y(), max_y))
-            
-            if new_x != child_pos.x() or new_y != child_pos.y():
-                child.setPos(new_x, new_y)
+            # Reposition Entry nodes to top-left corner
+            if child.node_type == "Entry":
+                top_left_pos = QPointF(self.inner_rect.left(), self.inner_rect.top())
+                if child.pos() != top_left_pos:
+                    child.setPos(top_left_pos)
+            # Reposition Exit nodes to top-right corner
+            elif child.node_type == "Exit":
+                top_right_pos = QPointF(self.inner_rect.right() - child.boundingRect().width(), 
+                                       self.inner_rect.top())
+                if child.pos() != top_right_pos:
+                    child.setPos(top_right_pos)
+            else:
+                # Make sure other children stay within bounds
+                child_pos = child.pos()
+                max_x = self.inner_rect.width() - child.boundingRect().width()
+                max_y = self.inner_rect.height() - child.boundingRect().height()
+                
+                new_x = max(0, min(child_pos.x(), max_x))
+                new_y = max(0, min(child_pos.y(), max_y))
+                
+                if new_x != child_pos.x() or new_y != child_pos.y():
+                    child.setPos(new_x, new_y)
     
     def add_child_node(self, node, pos=None):
         """Add a child node to this container node"""
@@ -704,7 +780,7 @@ class Node(QGraphicsItem):
         
         # Draw a subtle background for the container area
         if self.is_container and len(self.child_nodes) > 0:
-            container_bg = QColor(255, 255, 255, 10)  # Very subtle white
+            container_bg = QColor(255, 255, 255, CONTAINER_BG_OPACITY)  # Very subtle white
             painter.setBrush(container_bg)
             painter.setPen(Qt.NoPen)
             container_rect = QRectF(
@@ -979,6 +1055,11 @@ class Node(QGraphicsItem):
                     event.ignore()
                     return
         
+        # Entry and Exit nodes cannot have their title edited
+        if self.node_type in ["Entry", "Exit"]:
+            event.ignore()
+            return
+        
         # Check if the click was on the title area
         title_rect = QRectF(0, 0, self.width, self.title_height)
         if title_rect.contains(event.pos()):
@@ -1037,7 +1118,14 @@ class Node(QGraphicsItem):
             # Update the node size
             self.prepareGeometryChange()
             self.rect = new_rect
+            self.width = new_rect.width()
+            self.height = new_rect.height()
             self.update_handles()
+            
+            # Update inner rect and reposition Entry/Exit children if this is a State
+            if self.is_container:
+                self.update_inner_rect()
+            
             self.update()
             
             event.accept()
@@ -1104,12 +1192,38 @@ class Node(QGraphicsItem):
         if change == QGraphicsItem.ItemPositionChange and self.scene():
             # Mark that the node is being moved
             self.is_being_moved = True
+            
+            # Entry and Exit nodes should not be manually moved - they are auto-positioned
+            if self.node_type in ["Entry", "Exit"] and self.parent_node and self.parent_node.node_type in ["State", "StateMachine"]:
+                # Force Entry nodes to stay at top-left corner
+                if self.node_type == "Entry":
+                    value = QPointF(self.parent_node.inner_rect.left(), self.parent_node.inner_rect.top())
+                # Force Exit nodes to stay at top-right corner
+                elif self.node_type == "Exit":
+                    value = QPointF(self.parent_node.inner_rect.right() - self.boundingRect().width(), 
+                                   self.parent_node.inner_rect.top())
+            
             # Update Z-order when position changes
             self.update_z_order()
             
         elif change == QGraphicsItem.ItemPositionHasChanged and self.scene():
             # Update edges for this node and all descendants recursively
             self.update_descendant_edges()
+            
+            # If this is a State or StateMachine node with Entry/Exit children, reposition them
+            if self.node_type in ["State", "StateMachine"] and self.child_nodes:
+                for child in self.child_nodes:
+                    if child.node_type == "Entry":
+                        # Reposition Entry to top-left corner
+                        top_left_pos = QPointF(self.inner_rect.left(), self.inner_rect.top())
+                        if child.pos() != top_left_pos:
+                            child.setPos(top_left_pos)
+                    elif child.node_type == "Exit":
+                        # Reposition Exit to top-right corner
+                        top_right_pos = QPointF(self.inner_rect.right() - child.boundingRect().width(), 
+                                               self.inner_rect.top())
+                        if child.pos() != top_right_pos:
+                            child.setPos(top_right_pos)
             
             # Don't check parent during drag to avoid flickering
             # Parent check will happen in mouseReleaseEvent after drag is complete
@@ -1174,6 +1288,10 @@ class Node(QGraphicsItem):
     def _check_and_update_parent(self):
         """Check if this node is completely inside another node and update parent relationship"""
         if not self.scene():
+            return
+        
+        # Entry and Exit nodes must always stay with their parent State - don't allow reparenting
+        if self.node_type in ["Entry", "Exit"]:
             return
         
         # Prevent recursive calls
@@ -1460,14 +1578,20 @@ class NodeEditorWindow(QMainWindow):
         self.state_action = toolbar.addAction("State")
         self.state_action.setToolTip("Apply State type to selected node")
         self.state_action.triggered.connect(lambda: self.apply_node_type("State"))
+        
+        self.entry_action = toolbar.addAction("Entry")
+        self.entry_action.setToolTip("Apply Entry type to selected node (must be inside a State)")
+        self.entry_action.triggered.connect(lambda: self.apply_node_type("Entry"))
+        
+        self.exit_action = toolbar.addAction("Exit")
+        self.exit_action.setToolTip("Apply Exit type to selected node (must be inside a State)")
+        self.exit_action.triggered.connect(lambda: self.apply_node_type("Exit"))
 
         # Set icons for StateMachine and State actions (SVG-based for crisp scaling) with labels
-        sm_hex = "#27ae60"  # base StateMachine title color
-        sm_qc = QColor(sm_hex)
-        # 40% darker => factor ≈ 166 (since QColor.darker(200) => 50% darker)
-        st_qc = QColor(sm_qc).darker(166)
-        self.statemachine_action.setIcon(self.make_state_node_svg_icon(24, title_color=sm_hex, label="M"))
-        self.state_action.setIcon(self.make_state_node_svg_icon(24, title_color=st_qc.name(), label="S"))
+        self.statemachine_action.setIcon(self.make_state_node_svg_icon(24, title_color=COLOR_STATEMACHINE, label="M"))
+        self.state_action.setIcon(self.make_state_node_svg_icon(24, title_color=COLOR_STATE, label="S"))
+        self.entry_action.setIcon(self.make_state_node_svg_icon(24, title_color=COLOR_ENTRY, label="En"))
+        self.exit_action.setIcon(self.make_state_node_svg_icon(24, title_color=COLOR_EXIT, label="Ex"))
         
         toolbar.addSeparator()
         
@@ -1597,6 +1721,11 @@ class NodeEditorWindow(QMainWindow):
     
     def apply_node_type(self, node_type):
         """Apply a node type to all selected nodes"""
+        # Prevent node type changes in simulator mode
+        if self.simulator_mode:
+            self.statusBar().showMessage("Cannot change node types in Simulator mode", 2000)
+            return
+        
         selected_items = self.scene.selectedItems()
         
         # Filter to only Node items
@@ -1605,6 +1734,40 @@ class NodeEditorWindow(QMainWindow):
         if not nodes:
             self.statusBar().showMessage("No nodes selected")
             return
+        
+        # Special validation for Entry and Exit nodes
+        if node_type in ["Entry", "Exit"]:
+            valid_nodes = []
+            invalid_count = 0
+            already_has_node_count = 0
+            node_label = "Entry" if node_type == "Entry" else "Exit"
+            
+            for node in nodes:
+                # Entry/Exit nodes must be inside a State or StateMachine
+                if not (node.parent_node and node.parent_node.node_type in ["State", "StateMachine"]):
+                    invalid_count += 1
+                    continue
+                
+                # Check if the parent already has this type of node (excluding this node if it's already that type)
+                parent_has_node = False
+                for sibling in node.parent_node.child_nodes:
+                    if sibling != node and sibling.node_type == node_type:
+                        parent_has_node = True
+                        break
+                
+                if parent_has_node:
+                    already_has_node_count += 1
+                else:
+                    valid_nodes.append(node)
+            
+            if invalid_count > 0:
+                self.statusBar().showMessage(f"{node_label} nodes must be inside a State or StateMachine. {invalid_count} node(s) skipped.")
+            elif already_has_node_count > 0:
+                self.statusBar().showMessage(f"Parent already has an {node_label} node. {already_has_node_count} node(s) skipped.")
+            
+            nodes = valid_nodes
+            if not nodes:
+                return
         
         # Apply the type to all selected nodes and record for undo
         for node in nodes:
@@ -1616,7 +1779,16 @@ class NodeEditorWindow(QMainWindow):
             self.record_node_type_change(node, old_type, node_type, old_title)
         
         # Update status bar
-        type_name = "StateMachine (Green)" if node_type == "StateMachine" else "State (Orange)"
+        if node_type == "StateMachine":
+            type_name = "StateMachine (Green)"
+        elif node_type == "State":
+            type_name = "State (Dark Green)"
+        elif node_type == "Entry":
+            type_name = "Entry (Orange)"
+        elif node_type == "Exit":
+            type_name = "Exit (Red)"
+        else:
+            type_name = node_type
         self.statusBar().showMessage(f"Applied {type_name} to {len(nodes)} node(s)")
     
     def mark_as_initial(self):
@@ -1665,6 +1837,8 @@ class NodeEditorWindow(QMainWindow):
             # Disable all editing actions
             self.statemachine_action.setEnabled(False)
             self.state_action.setEnabled(False)
+            self.entry_action.setEnabled(False)
+            self.exit_action.setEnabled(False)
             self.initial_action.setEnabled(False)
             self.undo_action.setEnabled(False)
             self.redo_action.setEnabled(False)
@@ -1685,6 +1859,8 @@ class NodeEditorWindow(QMainWindow):
             # Enable all editing actions
             self.statemachine_action.setEnabled(True)
             self.state_action.setEnabled(True)
+            self.entry_action.setEnabled(True)
+            self.exit_action.setEnabled(True)
             self.initial_action.setEnabled(True)
             self.undo_action.setEnabled(True)
             self.redo_action.setEnabled(True)
@@ -3219,39 +3395,39 @@ class NodeEditorWindow(QMainWindow):
         new_action = file_menu.addAction("New")
         new_action.setShortcut("Ctrl+N")
         new_action.triggered.connect(self.new_design)
-        
+
         file_menu.addSeparator()
-        
+
         # Save action
         save_action = file_menu.addAction("Save")
         save_action.setShortcut("Ctrl+S")
         save_action.triggered.connect(self.save_design)
-        
+
         # Load action
         load_action = file_menu.addAction("Load")
         load_action.setShortcut("Ctrl+O")
         load_action.triggered.connect(self.load_design)
-        
+
         file_menu.addSeparator()
-        
+
         # Exit action
         exit_action = file_menu.addAction("Exit")
         exit_action.setShortcut("Ctrl+Q")
         exit_action.triggered.connect(self.close)
-        
+
         # View menu
         view_menu = menubar.addMenu("&View")
-        
+
         # Zoom in action
         zoom_in_action = view_menu.addAction("Zoom In")
         zoom_in_action.setShortcut("Ctrl++")
         zoom_in_action.triggered.connect(self.zoomIn)
-        
+
         # Zoom out action
         zoom_out_action = view_menu.addAction("Zoom Out")
         zoom_out_action.setShortcut("Ctrl+-")
         zoom_out_action.triggered.connect(self.zoomOut)
-        
+
         # Reset zoom action
         reset_zoom_action = view_menu.addAction("Reset Zoom")
         reset_zoom_action.setShortcut("Ctrl+0")
@@ -3299,7 +3475,7 @@ class NodeEditorWindow(QMainWindow):
         renderer.render(painter)
         painter.end()
         return QIcon(pm)
-    
+
     def make_state_node_svg_icon(self, size=24, title_color="#e67e22", label=None) -> QIcon:
         """Create a node-like icon: rounded rect with colored title bar (SVG).
         Optionally draws a centered label (e.g., 'S' or 'M')."""
@@ -3327,7 +3503,7 @@ class NodeEditorWindow(QMainWindow):
         renderer.render(painter)
         painter.end()
         return QIcon(pm)
-    
+
     def make_initial_state_svg_icon(self, size=24) -> QIcon:
         """Create an icon with a white circle (representing initial state indicator)."""
         svg = f"""
@@ -3344,7 +3520,7 @@ class NodeEditorWindow(QMainWindow):
         renderer.render(painter)
         painter.end()
         return QIcon(pm)
-    
+
     def make_undo_svg_icon(self, size=24) -> QIcon:
         """Create an undo icon with a curved arrow pointing left."""
         svg = f"""
@@ -3364,7 +3540,7 @@ class NodeEditorWindow(QMainWindow):
         renderer.render(painter)
         painter.end()
         return QIcon(pm)
-    
+
     def make_redo_svg_icon(self, size=24) -> QIcon:
         """Create a redo icon with a curved arrow pointing right."""
         svg = f"""
@@ -3384,7 +3560,7 @@ class NodeEditorWindow(QMainWindow):
         renderer.render(painter)
         painter.end()
         return QIcon(pm)
-    
+
     def make_new_file_svg_icon(self, size=24) -> QIcon:
         """Create a new file icon."""
         svg = f"""
@@ -3406,7 +3582,7 @@ class NodeEditorWindow(QMainWindow):
         renderer.render(painter)
         painter.end()
         return QIcon(pm)
-    
+
     def make_save_svg_icon(self, size=24) -> QIcon:
         """Create a save/floppy disk icon."""
         svg = f"""
@@ -3428,7 +3604,7 @@ class NodeEditorWindow(QMainWindow):
         renderer.render(painter)
         painter.end()
         return QIcon(pm)
-    
+
     def make_load_svg_icon(self, size=24) -> QIcon:
         """Create a load/open folder icon."""
         svg = f"""
@@ -3448,21 +3624,21 @@ class NodeEditorWindow(QMainWindow):
         renderer.render(painter)
         painter.end()
         return QIcon(pm)
-    
+
     def zoomIn(self):
         self.view.scale(self.view.zoom_in_factor, self.view.zoom_in_factor)
         self.view.zoom_level += self.view.zoom_step
-    
+
     def zoomOut(self):
         if self.view.zoom_level > self.view.zoom_range[0]:
             self.view.scale(self.view.zoom_out_factor, self.view.zoom_out_factor)
             self.view.zoom_level -= self.view.zoom_step
-    
+
     def resetZoom(self):
         # Reset the view's transformation matrix
         self.view.resetTransform()
         self.view.zoom_level = 0
-    
+
     def update_window_title(self):
         """Update the window title to show the current file name"""
         from version import __version__
@@ -3486,24 +3662,35 @@ class NodeEditorWindow(QMainWindow):
         
         # If right-clicked on a node, show node-specific options
         if isinstance(item, Node):
-            # Add child node action
-            add_child_action = context_menu.addAction("Add Child Node")
-            add_child_action.triggered.connect(lambda: self.view.add_child_node(item, pos))
-            
-            # If the node has a parent, add option to remove from parent
-            if item.parent_node:
-                remove_parent_action = context_menu.addAction("Remove from Parent")
-                remove_parent_action.triggered.connect(lambda: self.view.remove_node_from_parent(item))
-            
-            # Add delete action
-            delete_action = context_menu.addAction("Delete Node")
-            delete_action.triggered.connect(lambda: self.delete_node(item))
-            
-            context_menu.addSeparator()
+            # Only show editing options if not in simulator mode
+            if not self.simulator_mode:
+                # Add child node action
+                add_child_action = context_menu.addAction("Add Child Node")
+                add_child_action.triggered.connect(lambda: self.view.add_child_node(item, pos))
+                
+                # If this is a State or StateMachine node, add options to create Entry and Exit nodes
+                if item.node_type in ["State", "StateMachine"]:
+                    add_entry_action = context_menu.addAction("Add Entry Node")
+                    add_entry_action.triggered.connect(lambda: self.add_entry_node(item, scene_pos))
+                    
+                    add_exit_action = context_menu.addAction("Add Exit Node")
+                    add_exit_action.triggered.connect(lambda: self.add_exit_node(item, scene_pos))
+                
+                # If the node has a parent, add option to remove from parent
+                if item.parent_node:
+                    remove_parent_action = context_menu.addAction("Remove from Parent")
+                    remove_parent_action.triggered.connect(lambda: self.view.remove_node_from_parent(item))
+                
+                # Add delete action
+                delete_action = context_menu.addAction("Delete Node")
+                delete_action.triggered.connect(lambda: self.delete_node(item))
+                
+                context_menu.addSeparator()
         
-        # Always show add node option
-        add_node_action = context_menu.addAction("Add Node")
-        add_node_action.triggered.connect(lambda: self.add_node(scene_pos))
+        # Only show add node option if not in simulator mode
+        if not self.simulator_mode:
+            add_node_action = context_menu.addAction("Add Node")
+            add_node_action.triggered.connect(lambda: self.add_node(scene_pos))
         
         # Show the menu at the cursor position
         context_menu.exec_(self.view.mapToGlobal(pos))
@@ -3532,6 +3719,95 @@ class NodeEditorWindow(QMainWindow):
         self.record_node_creation(node, parent)
             
         return node
+    
+    def add_entry_node(self, parent_state, scene_pos):
+        """Add an Entry node inside a State or StateMachine node at the top-left corner"""
+        if not parent_state or parent_state.node_type not in ["State", "StateMachine"]:
+            self.statusBar().showMessage("Entry nodes can only be added to State or StateMachine nodes")
+            return None
+        
+        # Check if parent already has an Entry node
+        for child in parent_state.child_nodes:
+            if child.node_type == "Entry":
+                self.statusBar().showMessage(f"This {parent_state.node_type} already has an Entry node")
+                return None
+        
+        # Ensure the parent is set up as a container
+        if not parent_state.is_container:
+            parent_state.setup_container()
+        
+        # Update inner_rect to reflect current State size (in case it was resized)
+        parent_state.update_inner_rect()
+        
+        # Position Entry node at top-left corner of State's inner boundary
+        # Use the parent's inner_rect which defines the container area
+        top_left_pos = QPointF(parent_state.inner_rect.left(), parent_state.inner_rect.top())
+        
+        # Create the Entry node
+        entry_node = Node("Entry", None, parent_state)
+        entry_node.action_monitor = self.action_monitor
+        
+        # Apply Entry type BEFORE adding as child
+        entry_node.set_node_type("Entry")
+        
+        # Add as child to the State at top-left position
+        parent_state.add_child_node(entry_node, top_left_pos)
+        
+        # Select the new node
+        for item in self.scene.selectedItems():
+            item.setSelected(False)
+        entry_node.setSelected(True)
+        
+        # Record node creation for undo
+        self.record_node_creation(entry_node, parent_state)
+        
+        self.statusBar().showMessage(f"Entry node added to {parent_state.node_type} at top-left corner")
+        return entry_node
+    
+    def add_exit_node(self, parent_state, scene_pos):
+        """Add an Exit node inside a State or StateMachine node at the top-right corner"""
+        if not parent_state or parent_state.node_type not in ["State", "StateMachine"]:
+            self.statusBar().showMessage("Exit nodes can only be added to State or StateMachine nodes")
+            return None
+        
+        # Check if parent already has an Exit node
+        for child in parent_state.child_nodes:
+            if child.node_type == "Exit":
+                self.statusBar().showMessage(f"This {parent_state.node_type} already has an Exit node")
+                return None
+        
+        # Ensure the parent is set up as a container
+        if not parent_state.is_container:
+            parent_state.setup_container()
+        
+        # Update inner_rect to reflect current State size (in case it was resized)
+        parent_state.update_inner_rect()
+        
+        # Position Exit node at top-right corner of State's inner boundary
+        # Use the parent's inner_rect which defines the container area
+        # Subtract the node width (100) to align it to the right edge
+        top_right_pos = QPointF(parent_state.inner_rect.right() - 100, parent_state.inner_rect.top())
+        
+        # Create the Exit node
+        exit_node = Node("Exit", None, parent_state)
+        exit_node.action_monitor = self.action_monitor
+        
+        # Apply Exit type BEFORE adding as child
+        exit_node.set_node_type("Exit")
+        
+        # Add as child to the State at top-right position
+        parent_state.add_child_node(exit_node, top_right_pos)
+        
+        # Select the new node
+        for item in self.scene.selectedItems():
+            item.setSelected(False)
+        exit_node.setSelected(True)
+        
+        # Record node creation for undo
+        self.record_node_creation(exit_node, parent_state)
+        
+        self.statusBar().showMessage(f"Exit node added to {parent_state.node_type} at top-right corner")
+        return exit_node
     
     def delete_node(self, node, record_for_undo=True):
         """Delete a node and all its children, removing connected edges first."""
@@ -3574,12 +3850,12 @@ class NodeEditorWindow(QMainWindow):
     def validate_undo_action(self, action):
         """Validate that an undo action can still be performed"""
         action_type = action['type']
-        
+
         if action_type == 'node_move':
             # Check if node still exists in scene
             node = action['node']
             return node.scene() == self.scene
-            
+
         elif action_type == 'node_create':
             # For create undo (which means delete), node must exist
             node = action['node']
@@ -3589,11 +3865,11 @@ class NodeEditorWindow(QMainWindow):
             if parent and node not in parent.child_nodes:
                 return False
             return True
-            
+
         elif action_type == 'node_delete':
             # For delete undo (which means recreate), node must NOT exist
             node_data = action['node_data']
-            
+
             # Helper to check if node exists by ID
             def node_exists(node_id):
                 for n in self.nodes:
