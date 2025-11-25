@@ -1591,7 +1591,7 @@ class NodeEditorWindow(QMainWindow):
         self.statemachine_action.triggered.connect(lambda: self.apply_node_type("StateMachine"))
         
         self.state_action = toolbar.addAction("State")
-        self.state_action.setToolTip("Apply State type to selected node (must be inside a StateMachine)")
+        self.state_action.setToolTip("Apply State type to selected node (must be inside a StateMachine or State)")
         self.state_action.triggered.connect(lambda: self.apply_node_type("State"))
         
         self.entry_action = toolbar.addAction("Entry")
@@ -1781,8 +1781,8 @@ class NodeEditorWindow(QMainWindow):
             invalid_count = 0
             
             for node in nodes:
-                # State nodes must be inside a StateMachine node
-                if node.parent_node and node.parent_node.node_type != "StateMachine":
+                # State nodes must be inside a StateMachine or another State (hierarchical states)
+                if node.parent_node and node.parent_node.node_type not in ["StateMachine", "State"]:
                     invalid_count += 1
                     continue
                 # If no parent, it's a top-level node which is also invalid
@@ -1793,7 +1793,7 @@ class NodeEditorWindow(QMainWindow):
                     valid_nodes.append(node)
             
             if invalid_count > 0:
-                self.statusBar().showMessage(f"State nodes must be inside a StateMachine node. {invalid_count} node(s) skipped.")
+                self.statusBar().showMessage(f"State nodes must be inside a StateMachine or State. {invalid_count} node(s) skipped.")
             
             nodes = valid_nodes
             if not nodes:
