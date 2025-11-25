@@ -1,0 +1,206 @@
+{
+  "nodes": [
+    {
+      "title": "Process1Pr",
+      "pos": {
+        "x": -725.0,
+        "y": -328.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 660.0,
+        "height": 540.0
+      },
+      "node_type": "Process",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": null,
+      "id": 4385876576
+    },
+    {
+      "title": "Statemachine1",
+      "pos": {
+        "x": 31.0,
+        "y": 57.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 597.0,
+        "height": 452.0
+      },
+      "node_type": "StateMachine",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": 4385876576,
+      "id": 4385980624
+    },
+    {
+      "title": "State1",
+      "pos": {
+        "x": 36.0,
+        "y": 60.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 251.0,
+        "height": 157.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": true,
+      "parent_id": 4385980624,
+      "id": 4385983072
+    },
+    {
+      "title": "State2",
+      "pos": {
+        "x": 274.0,
+        "y": 248.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 283.0,
+        "height": 168.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4385980624,
+      "id": 4385985440
+    },
+    {
+      "title": "Process3Pr",
+      "pos": {
+        "x": -24.0,
+        "y": -326.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 731.25,
+        "height": 537.5
+      },
+      "node_type": "Process",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": null,
+      "id": 4385987600
+    },
+    {
+      "title": "Statemachine1",
+      "pos": {
+        "x": 28.75,
+        "y": 56.25
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 673.75,
+        "height": 448.75
+      },
+      "node_type": "StateMachine",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": 4385987600,
+      "id": 4385047168
+    },
+    {
+      "title": "State1",
+      "pos": {
+        "x": 40.0,
+        "y": 65.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 263.75,
+        "height": 141.25
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4385047168,
+      "id": 4385049616
+    },
+    {
+      "title": "State2",
+      "pos": {
+        "x": 340.0,
+        "y": 232.5
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 276.25,
+        "height": 167.5
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": true,
+      "parent_id": 4385047168,
+      "id": 4385064272
+    }
+  ],
+  "edges": [
+    {
+      "start_node_id": 4385983072,
+      "end_node_id": 4385985440,
+      "title": "EV_1",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 254.5,
+        "y": 77.44070233860592
+      },
+      "end_offset": {
+        "x": 168.95864705756887,
+        "y": -3.5
+      }
+    },
+    {
+      "start_node_id": 4385985440,
+      "end_node_id": 4385983072,
+      "title": "EV_2",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": -3.5,
+        "y": 90.56646678107064
+      },
+      "end_offset": {
+        "x": 62.69336884313839,
+        "y": 160.5
+      }
+    },
+    {
+      "start_node_id": 4385049616,
+      "end_node_id": 4385064272,
+      "title": "EV_3",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 267.25,
+        "y": 65.8507413124089
+      },
+      "end_offset": {
+        "x": 134.06821854536247,
+        "y": -3.5
+      }
+    },
+    {
+      "start_node_id": 4385064272,
+      "end_node_id": 4385049616,
+      "title": "EV_4",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": -3.5,
+        "y": 87.78191348738464
+      },
+      "end_offset": {
+        "x": 108.0630923050478,
+        "y": 144.75
+      }
+    }
+  ]
+}

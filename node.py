@@ -16,6 +16,9 @@ from edge import Edge, EdgeControlPoint, WaypointControlPoint, EdgeTitleItem
 # ============================================================================
 # Define colors for all node types in one place for easy modification
 
+# Process node colors
+COLOR_PROCESS = "#1f74ad"  # Blue
+
 # StateMachine node colors
 COLOR_STATEMACHINE = "#9999ff"  # Green
 
@@ -526,6 +529,7 @@ class NodeEditorGraphicsView(QGraphicsView):
 
 class Node(QGraphicsItem):
     # Class-level counters for default naming
+    _process_seq = 1
     _statemachine_seq = 1
     _state_seq = 1
     _entry_seq = 1
@@ -605,7 +609,14 @@ class Node(QGraphicsItem):
         """Set the node type and update title color and text accordingly"""
         self.node_type = node_type
         
-        if node_type == "StateMachine":
+        if node_type == "Process":
+            # Orange title background for Process
+            self.title_color = QColor(COLOR_PROCESS)
+            # Update title with naming convention: ProcessPr
+            self.title = f"Process{Node._process_seq}Pr"
+            self.title_item.setPlainText(self.title)
+            Node._process_seq += 1
+        elif node_type == "StateMachine":
             # Green title background for StateMachine
             self.title_color = QColor(COLOR_STATEMACHINE)
             # Update title with naming convention: StatemachineSm
@@ -1571,12 +1582,16 @@ class NodeEditorWindow(QMainWindow):
         toolbar.addWidget(left_spacer)
         
         # Add node type buttons (store as instance variables for enabling/disabling)
+        self.process_action = toolbar.addAction("Process")
+        self.process_action.setToolTip("Apply Process type to selected node")
+        self.process_action.triggered.connect(lambda: self.apply_node_type("Process"))
+        
         self.statemachine_action = toolbar.addAction("StateMachine")
-        self.statemachine_action.setToolTip("Apply StateMachine type to selected node")
+        self.statemachine_action.setToolTip("Apply StateMachine type to selected node (must be inside a Process)")
         self.statemachine_action.triggered.connect(lambda: self.apply_node_type("StateMachine"))
         
         self.state_action = toolbar.addAction("State")
-        self.state_action.setToolTip("Apply State type to selected node")
+        self.state_action.setToolTip("Apply State type to selected node (must be inside a StateMachine)")
         self.state_action.triggered.connect(lambda: self.apply_node_type("State"))
         
         self.entry_action = toolbar.addAction("Entry")
@@ -1588,6 +1603,7 @@ class NodeEditorWindow(QMainWindow):
         self.exit_action.triggered.connect(lambda: self.apply_node_type("Exit"))
 
         # Set icons for StateMachine and State actions (SVG-based for crisp scaling) with labels
+        self.process_action.setIcon(self.make_state_node_svg_icon(24, title_color=COLOR_PROCESS, label="P"))
         self.statemachine_action.setIcon(self.make_state_node_svg_icon(24, title_color=COLOR_STATEMACHINE, label="M"))
         self.state_action.setIcon(self.make_state_node_svg_icon(24, title_color=COLOR_STATE, label="S"))
         self.entry_action.setIcon(self.make_state_node_svg_icon(24, title_color=COLOR_ENTRY, label="En"))
@@ -1735,6 +1751,54 @@ class NodeEditorWindow(QMainWindow):
             self.statusBar().showMessage("No nodes selected")
             return
         
+        # Special validation for StateMachine nodes
+        if node_type == "StateMachine":
+            valid_nodes = []
+            invalid_count = 0
+            
+            for node in nodes:
+                # StateMachine nodes must be inside a Process node
+                if node.parent_node and node.parent_node.node_type != "Process":
+                    invalid_count += 1
+                    continue
+                # If no parent, it's a top-level node which is also invalid
+                elif not node.parent_node:
+                    invalid_count += 1
+                    continue
+                else:
+                    valid_nodes.append(node)
+            
+            if invalid_count > 0:
+                self.statusBar().showMessage(f"StateMachine nodes must be inside a Process node. {invalid_count} node(s) skipped.")
+            
+            nodes = valid_nodes
+            if not nodes:
+                return
+        
+        # Special validation for State nodes
+        if node_type == "State":
+            valid_nodes = []
+            invalid_count = 0
+            
+            for node in nodes:
+                # State nodes must be inside a StateMachine node
+                if node.parent_node and node.parent_node.node_type != "StateMachine":
+                    invalid_count += 1
+                    continue
+                # If no parent, it's a top-level node which is also invalid
+                elif not node.parent_node:
+                    invalid_count += 1
+                    continue
+                else:
+                    valid_nodes.append(node)
+            
+            if invalid_count > 0:
+                self.statusBar().showMessage(f"State nodes must be inside a StateMachine node. {invalid_count} node(s) skipped.")
+            
+            nodes = valid_nodes
+            if not nodes:
+                return
+        
         # Special validation for Entry and Exit nodes
         if node_type in ["Entry", "Exit"]:
             valid_nodes = []
@@ -1779,7 +1843,9 @@ class NodeEditorWindow(QMainWindow):
             self.record_node_type_change(node, old_type, node_type, old_title)
         
         # Update status bar
-        if node_type == "StateMachine":
+        if node_type == "Process":
+            type_name = "Process (Orange)"
+        elif node_type == "StateMachine":
             type_name = "StateMachine (Green)"
         elif node_type == "State":
             type_name = "State (Dark Green)"
@@ -1835,6 +1901,7 @@ class NodeEditorWindow(QMainWindow):
             self.simulator_button.setText("Simulator ON")
             self.statusBar().showMessage("Simulator mode enabled - Editing disabled", 2000)
             # Disable all editing actions
+            self.process_action.setEnabled(False)
             self.statemachine_action.setEnabled(False)
             self.state_action.setEnabled(False)
             self.entry_action.setEnabled(False)
@@ -1850,13 +1917,14 @@ class NodeEditorWindow(QMainWindow):
             # Disable rubber band selection (drag to select multiple items)
             self.view.setDragMode(QGraphicsView.NoDrag)
             
-            # Initialize state machine simulation
-            self.current_state = None
+            # Initialize state machine simulation - track state per StateMachine
+            self.current_states = {}  # Dict: {statemachine_node: current_state_node}
             self.enter_initial_state()
         else:
             self.simulator_button.setText("Simulator OFF")
             self.statusBar().showMessage("Editor mode enabled", 2000)
             # Enable all editing actions
+            self.process_action.setEnabled(True)
             self.statemachine_action.setEnabled(True)
             self.state_action.setEnabled(True)
             self.entry_action.setEnabled(True)
@@ -1872,57 +1940,82 @@ class NodeEditorWindow(QMainWindow):
             # Re-enable rubber band selection
             self.view.setDragMode(QGraphicsView.RubberBandDrag)
             
-            # Exit simulation - clear current state highlighting
-            if hasattr(self, 'current_state') and self.current_state:
-                self.exit_state(self.current_state)
-                self.current_state = None
+            # Exit simulation - clear all current state highlighting
+            if hasattr(self, 'current_states'):
+                for statemachine, state in list(self.current_states.items()):
+                    if state:
+                        self.exit_state(state)
+                self.current_states = {}
     
     def enter_initial_state(self):
-        """Enter the initial state when starting simulation"""
-        # Find the top-level StateMachine or initial State
-        initial_state = None
+        """Enter the initial state when starting simulation - supports multiple Process nodes"""
+        # Find all Process nodes in the scene
+        process_nodes = [node for node in self.nodes if node.node_type == "Process"]
         
-        # First, look for a StateMachine with an initial state
-        for node in self.nodes:
-            if node.node_type == "StateMachine" and node.is_container and node.child_nodes:
+        if not process_nodes:
+            self.statusBar().showMessage("No Process nodes found to simulate", 2000)
+            return
+        
+        # For each Process, find its StateMachine and initialize it
+        statemachines_found = 0
+        for process in process_nodes:
+            if not process.is_container or not process.child_nodes:
+                continue
+            
+            # Find StateMachine child
+            statemachine = None
+            for child in process.child_nodes:
+                if child.node_type == "StateMachine":
+                    statemachine = child
+                    break
+            
+            if not statemachine:
+                continue
+            
+            # Find initial state in this StateMachine
+            initial_state = None
+            if statemachine.is_container and statemachine.child_nodes:
                 # Look for initial state among children
-                for child in node.child_nodes:
+                for child in statemachine.child_nodes:
                     if child.node_type == "State" and child.is_initial:
                         initial_state = child
                         break
-                if initial_state:
-                    break
+                
+                # If no initial state marked, pick the first State
+                if not initial_state:
+                    for child in statemachine.child_nodes:
+                        if child.node_type == "State":
+                            initial_state = child
+                            break
+            
+            # Enter the initial state for this StateMachine
+            if initial_state:
+                self.enter_state(initial_state, statemachine)
+                statemachines_found += 1
         
-        # If no initial state found in StateMachine, look for top-level initial State
-        if not initial_state:
-            for node in self.nodes:
-                if node.node_type == "State" and node.is_initial and not node.parent_node:
-                    initial_state = node
-                    break
-        
-        # If still no initial state, just pick the first State
-        if not initial_state:
-            for node in self.nodes:
-                if node.node_type == "State":
-                    initial_state = node
-                    break
-        
-        if initial_state:
-            self.enter_state(initial_state)
+        if statemachines_found == 0:
+            self.statusBar().showMessage("No StateMachines with States found in Process nodes", 2000)
         else:
-            self.statusBar().showMessage("No state found to simulate", 2000)
+            self.statusBar().showMessage(f"Simulating {statemachines_found} StateMachine(s)", 2000)
     
-    def enter_state(self, state):
+    def enter_state(self, state, statemachine=None):
         """Enter a state with hierarchical support"""
         if not state or state.node_type not in ["State", "StateMachine"]:
             return
         
-        # Exit current state if any
-        if self.current_state:
-            self.exit_state(self.current_state)
+        # Find the StateMachine this state belongs to if not provided
+        if statemachine is None:
+            statemachine = self.find_parent_statemachine(state)
+        
+        if statemachine is None:
+            return
+        
+        # Exit current state for this StateMachine if any
+        if statemachine in self.current_states and self.current_states[statemachine]:
+            self.exit_state(self.current_states[statemachine])
         
         # Enter the new state
-        self.current_state = state
+        self.current_states[statemachine] = state
         self.highlight_state(state, True)
         
         # Check if this state has children - if so, enter the initial child
@@ -1943,11 +2036,10 @@ class NodeEditorWindow(QMainWindow):
             
             # Recursively enter the child state
             if initial_child:
-                self.enter_state(initial_child)
+                self.enter_state(initial_child, statemachine)
         else:
-            # Leaf state - show status
-            state_path = self.get_state_path(state)
-            self.statusBar().showMessage(f"Current state: {state_path}", 0)
+            # Leaf state - show status for all active states
+            self.update_simulator_status()
     
     def exit_state(self, state):
         """Exit a state and remove highlighting"""
@@ -2024,6 +2116,34 @@ class NodeEditorWindow(QMainWindow):
             
             smiley.setPos(x, y)
     
+    def find_parent_statemachine(self, state):
+        """Find the StateMachine that contains this state"""
+        current = state
+        while current:
+            if current.node_type == "StateMachine":
+                return current
+            current = current.parent_node if hasattr(current, 'parent_node') else None
+        return None
+    
+    def update_simulator_status(self):
+        """Update status bar with all active states"""
+        if not hasattr(self, 'current_states') or not self.current_states:
+            return
+        
+        state_messages = []
+        for statemachine, state in self.current_states.items():
+            if state:
+                state_path = self.get_state_path(state)
+                # Get the Process name for context
+                process = statemachine.parent_node if statemachine.parent_node else None
+                if process and process.node_type == "Process":
+                    state_messages.append(f"{process.title}: {state_path}")
+                else:
+                    state_messages.append(state_path)
+        
+        if state_messages:
+            self.statusBar().showMessage(" | ".join(state_messages), 0)
+    
     def get_state_path(self, state):
         """Get the hierarchical path of a state"""
         path = []
@@ -2033,18 +2153,28 @@ class NodeEditorWindow(QMainWindow):
             current = current.parent_node if hasattr(current, 'parent_node') else None
         return " → ".join(path)
     
-    def transition_to_state(self, target_state):
+    def transition_to_state(self, target_state, statemachine=None):
         """Transition from current state to target state"""
         if not target_state or target_state.node_type not in ["State", "StateMachine"]:
             return
         
+        # Find the StateMachine this state belongs to if not provided
+        if statemachine is None:
+            statemachine = self.find_parent_statemachine(target_state)
+        
+        if statemachine is None:
+            return
+        
+        # Get current state for this StateMachine
+        current_state = self.current_states.get(statemachine)
+        
         # Check if we're already inside the target state's hierarchy
-        if self.is_inside_state(self.current_state, target_state):
+        if self.is_inside_state(current_state, target_state):
             # Already inside this state, no transition needed
             self.statusBar().showMessage(f"Already inside {target_state.title}", 2000)
             return
         
-        self.enter_state(target_state)
+        self.enter_state(target_state, statemachine)
     
     def is_inside_state(self, current, target):
         """Check if current state is inside the target state's hierarchy"""
@@ -2093,7 +2223,17 @@ class NodeEditorWindow(QMainWindow):
     
     def is_transition_valid(self, source_node):
         """Check if a transition from source_node is valid given current state"""
-        if not self.current_state or not source_node:
+        if not hasattr(self, 'current_states') or not source_node:
+            return False
+        
+        # Find which StateMachine the source belongs to
+        statemachine = self.find_parent_statemachine(source_node)
+        if statemachine is None:
+            return False
+        
+        # Get current state for this StateMachine
+        current_state = self.current_states.get(statemachine)
+        if not current_state:
             return False
         
         # The transition is valid if:
@@ -2101,7 +2241,7 @@ class NodeEditorWindow(QMainWindow):
         # 2. We are in a descendant of the source state (child, grandchild, etc.)
         
         # Check if current state is the source or a descendant of source
-        node = self.current_state
+        node = current_state
         while node:
             if node == source_node:
                 return True
