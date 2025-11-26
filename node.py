@@ -29,7 +29,10 @@ COLOR_STATE = "#4d4dff"  # Dark Green (calculated as QColor("#27ae60").darker(16
 COLOR_ENTRY = "#5c5c8a"  # Orange
 
 # Exit node colors
-COLOR_EXIT = "#3d3d5c"  # Red
+COLOR_EXIT = "#5c5c8a"  # Red
+
+# Run node colors
+COLOR_RUN = "#5c5c8a"  # Purple
 
 # Default node colors
 COLOR_DEFAULT = "#3498db"  # Blue
@@ -534,6 +537,7 @@ class Node(QGraphicsItem):
     _state_seq = 1
     _entry_seq = 1
     _exit_seq = 1
+    _run_seq = 1
     
     def __init__(self, title="Node", pos=None, parent=None):
         super().__init__(parent)
@@ -654,6 +658,21 @@ class Node(QGraphicsItem):
             self.width = 100
             self.height = 60
             self.update_size()
+        elif node_type == "Run":
+            # Purple title background for Run
+            self.title_color = QColor(COLOR_RUN)
+            # Run nodes always have the title "Run"
+            self.title = "Run"
+            self.title_item.setPlainText(self.title)
+            # Make Run nodes smaller (same as Entry/Exit)
+            self.min_width = 100
+            self.min_height = 60
+            self.width = 100
+            self.height = 60
+            self.update_size()
+            # Position at bottom-left of parent if parent exists
+            if self.parent_node:
+                self.position_at_bottom_left()
         else:
             # Default blue title background
             self.title_color = QColor(COLOR_DEFAULT)
@@ -672,6 +691,22 @@ class Node(QGraphicsItem):
             self.update()
             return True
         return False
+    
+    def position_at_bottom_left(self):
+        """Position this node at the bottom-left of its parent container"""
+        if not self.parent_node or not self.parent_node.is_container:
+            return
+        
+        # Get parent's inner rect (content area)
+        parent_rect = self.parent_node.inner_rect
+        
+        # Position at bottom-left with small margin
+        margin = 10
+        x = parent_rect.x() + margin
+        y = parent_rect.y() + parent_rect.height() - self.height - margin
+        
+        # Set position in parent's local coordinates
+        self.setPos(x, y)
     
     def setup_container(self):
         """Set up this node as a container for child nodes"""
@@ -704,6 +739,12 @@ class Node(QGraphicsItem):
                                        self.inner_rect.top())
                 if child.pos() != top_right_pos:
                     child.setPos(top_right_pos)
+            # Reposition Run nodes to bottom-left corner
+            elif child.node_type == "Run":
+                bottom_left_pos = QPointF(self.inner_rect.left(), 
+                                         self.inner_rect.bottom() - child.boundingRect().height())
+                if child.pos() != bottom_left_pos:
+                    child.setPos(bottom_left_pos)
             else:
                 # Make sure other children stay within bounds
                 child_pos = child.pos()
@@ -1204,8 +1245,8 @@ class Node(QGraphicsItem):
             # Mark that the node is being moved
             self.is_being_moved = True
             
-            # Entry and Exit nodes should not be manually moved - they are auto-positioned
-            if self.node_type in ["Entry", "Exit"] and self.parent_node and self.parent_node.node_type in ["State", "StateMachine"]:
+            # Entry, Exit, and Run nodes should not be manually moved - they are auto-positioned
+            if self.node_type in ["Entry", "Exit", "Run"] and self.parent_node and self.parent_node.node_type in ["State", "StateMachine"]:
                 # Force Entry nodes to stay at top-left corner
                 if self.node_type == "Entry":
                     value = QPointF(self.parent_node.inner_rect.left(), self.parent_node.inner_rect.top())
@@ -1213,6 +1254,10 @@ class Node(QGraphicsItem):
                 elif self.node_type == "Exit":
                     value = QPointF(self.parent_node.inner_rect.right() - self.boundingRect().width(), 
                                    self.parent_node.inner_rect.top())
+                # Force Run nodes to stay at bottom-left corner
+                elif self.node_type == "Run":
+                    value = QPointF(self.parent_node.inner_rect.left(), 
+                                   self.parent_node.inner_rect.bottom() - self.boundingRect().height())
             
             # Update Z-order when position changes
             self.update_z_order()
@@ -1221,7 +1266,7 @@ class Node(QGraphicsItem):
             # Update edges for this node and all descendants recursively
             self.update_descendant_edges()
             
-            # If this is a State or StateMachine node with Entry/Exit children, reposition them
+            # If this is a State or StateMachine node with Entry/Exit/Run children, reposition them
             if self.node_type in ["State", "StateMachine"] and self.child_nodes:
                 for child in self.child_nodes:
                     if child.node_type == "Entry":
@@ -1235,6 +1280,12 @@ class Node(QGraphicsItem):
                                                self.inner_rect.top())
                         if child.pos() != top_right_pos:
                             child.setPos(top_right_pos)
+                    elif child.node_type == "Run":
+                        # Reposition Run to bottom-left corner
+                        bottom_left_pos = QPointF(self.inner_rect.left(), 
+                                                 self.inner_rect.bottom() - child.boundingRect().height())
+                        if child.pos() != bottom_left_pos:
+                            child.setPos(bottom_left_pos)
             
             # Don't check parent during drag to avoid flickering
             # Parent check will happen in mouseReleaseEvent after drag is complete
@@ -1301,8 +1352,8 @@ class Node(QGraphicsItem):
         if not self.scene():
             return
         
-        # Entry and Exit nodes must always stay with their parent State - don't allow reparenting
-        if self.node_type in ["Entry", "Exit"]:
+        # Entry, Exit, and Run nodes must always stay with their parent - don't allow reparenting
+        if self.node_type in ["Entry", "Exit", "Run"]:
             return
         
         # Prevent recursive calls
@@ -1601,6 +1652,10 @@ class NodeEditorWindow(QMainWindow):
         self.exit_action = toolbar.addAction("Exit")
         self.exit_action.setToolTip("Apply Exit type to selected node (must be inside a State)")
         self.exit_action.triggered.connect(lambda: self.apply_node_type("Exit"))
+        
+        self.run_action = toolbar.addAction("Run")
+        self.run_action.setToolTip("Apply Run type to selected node (must be inside a State or StateMachine)")
+        self.run_action.triggered.connect(lambda: self.apply_node_type("Run"))
 
         # Set icons for StateMachine and State actions (SVG-based for crisp scaling) with labels
         self.process_action.setIcon(self.make_state_node_svg_icon(24, title_color=COLOR_PROCESS, label="P"))
@@ -1608,6 +1663,7 @@ class NodeEditorWindow(QMainWindow):
         self.state_action.setIcon(self.make_state_node_svg_icon(24, title_color=COLOR_STATE, label="S"))
         self.entry_action.setIcon(self.make_state_node_svg_icon(24, title_color=COLOR_ENTRY, label="En"))
         self.exit_action.setIcon(self.make_state_node_svg_icon(24, title_color=COLOR_EXIT, label="Ex"))
+        self.run_action.setIcon(self.make_state_node_svg_icon(24, title_color=COLOR_RUN, label="R"))
         
         toolbar.addSeparator()
         
@@ -1799,15 +1855,20 @@ class NodeEditorWindow(QMainWindow):
             if not nodes:
                 return
         
-        # Special validation for Entry and Exit nodes
-        if node_type in ["Entry", "Exit"]:
+        # Special validation for Entry, Exit, and Run nodes
+        if node_type in ["Entry", "Exit", "Run"]:
             valid_nodes = []
             invalid_count = 0
             already_has_node_count = 0
-            node_label = "Entry" if node_type == "Entry" else "Exit"
+            if node_type == "Entry":
+                node_label = "Entry"
+            elif node_type == "Exit":
+                node_label = "Exit"
+            else:
+                node_label = "Run"
             
             for node in nodes:
-                # Entry/Exit nodes must be inside a State or StateMachine
+                # Entry/Exit/Run nodes must be inside a State or StateMachine
                 if not (node.parent_node and node.parent_node.node_type in ["State", "StateMachine"]):
                     invalid_count += 1
                     continue
@@ -1827,7 +1888,7 @@ class NodeEditorWindow(QMainWindow):
             if invalid_count > 0:
                 self.statusBar().showMessage(f"{node_label} nodes must be inside a State or StateMachine. {invalid_count} node(s) skipped.")
             elif already_has_node_count > 0:
-                self.statusBar().showMessage(f"Parent already has an {node_label} node. {already_has_node_count} node(s) skipped.")
+                self.statusBar().showMessage(f"Parent already has a {node_label} node. {already_has_node_count} node(s) skipped.")
             
             nodes = valid_nodes
             if not nodes:
@@ -1853,6 +1914,8 @@ class NodeEditorWindow(QMainWindow):
             type_name = "Entry (Orange)"
         elif node_type == "Exit":
             type_name = "Exit (Red)"
+        elif node_type == "Run":
+            type_name = "Run (Purple)"
         else:
             type_name = node_type
         self.statusBar().showMessage(f"Applied {type_name} to {len(nodes)} node(s)")
@@ -1906,6 +1969,7 @@ class NodeEditorWindow(QMainWindow):
             self.state_action.setEnabled(False)
             self.entry_action.setEnabled(False)
             self.exit_action.setEnabled(False)
+            self.run_action.setEnabled(False)
             self.initial_action.setEnabled(False)
             self.undo_action.setEnabled(False)
             self.redo_action.setEnabled(False)
@@ -1929,6 +1993,7 @@ class NodeEditorWindow(QMainWindow):
             self.state_action.setEnabled(True)
             self.entry_action.setEnabled(True)
             self.exit_action.setEnabled(True)
+            self.run_action.setEnabled(True)
             self.initial_action.setEnabled(True)
             self.undo_action.setEnabled(True)
             self.redo_action.setEnabled(True)
@@ -3840,13 +3905,16 @@ class NodeEditorWindow(QMainWindow):
                 add_child_action = context_menu.addAction("Add Child Node")
                 add_child_action.triggered.connect(lambda: self.view.add_child_node(item, pos))
                 
-                # If this is a State or StateMachine node, add options to create Entry and Exit nodes
+                # If this is a State or StateMachine node, add options to create Entry, Exit, and Run nodes
                 if item.node_type in ["State", "StateMachine"]:
                     add_entry_action = context_menu.addAction("Add Entry Node")
                     add_entry_action.triggered.connect(lambda: self.add_entry_node(item, scene_pos))
                     
                     add_exit_action = context_menu.addAction("Add Exit Node")
                     add_exit_action.triggered.connect(lambda: self.add_exit_node(item, scene_pos))
+                    
+                    add_run_action = context_menu.addAction("Add Run Node")
+                    add_run_action.triggered.connect(lambda: self.add_run_node(item, scene_pos))
                 
                 # If the node has a parent, add option to remove from parent
                 if item.parent_node:
@@ -3980,6 +4048,52 @@ class NodeEditorWindow(QMainWindow):
         
         self.statusBar().showMessage(f"Exit node added to {parent_state.node_type} at top-right corner")
         return exit_node
+    
+    def add_run_node(self, parent_state, scene_pos):
+        """Add a Run node inside a State or StateMachine node at the bottom-left corner"""
+        if not parent_state or parent_state.node_type not in ["State", "StateMachine"]:
+            self.statusBar().showMessage("Run nodes can only be added to State or StateMachine nodes")
+            return None
+        
+        # Check if parent already has a Run node
+        for child in parent_state.child_nodes:
+            if child.node_type == "Run":
+                self.statusBar().showMessage(f"This {parent_state.node_type} already has a Run node")
+                return None
+        
+        # Ensure the parent is set up as a container
+        if not parent_state.is_container:
+            parent_state.setup_container()
+        
+        # Update inner_rect to reflect current State size (in case it was resized)
+        parent_state.update_inner_rect()
+        
+        # Position Run node at bottom-left corner of State's inner boundary
+        # Use the parent's inner_rect which defines the container area
+        # Subtract the node height (60) to align it to the bottom edge
+        bottom_left_pos = QPointF(parent_state.inner_rect.left(), 
+                                  parent_state.inner_rect.bottom() - 60)
+        
+        # Create the Run node
+        run_node = Node("Run", None, parent_state)
+        run_node.action_monitor = self.action_monitor
+        
+        # Apply Run type BEFORE adding as child
+        run_node.set_node_type("Run")
+        
+        # Add as child to the State at bottom-left position
+        parent_state.add_child_node(run_node, bottom_left_pos)
+        
+        # Select the new node
+        for item in self.scene.selectedItems():
+            item.setSelected(False)
+        run_node.setSelected(True)
+        
+        # Record node creation for undo
+        self.record_node_creation(run_node, parent_state)
+        
+        self.statusBar().showMessage(f"Run node added to {parent_state.node_type} at bottom-left corner")
+        return run_node
     
     def delete_node(self, node, record_for_undo=True):
         """Delete a node and all its children, removing connected edges first."""
