@@ -1,0 +1,502 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Statechart Diagram - design_state_machine.json</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+        
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
+            color: #fff;
+            padding: 20px;
+            min-height: 100vh;
+        }
+        
+        .container {
+            max-width: 100%;
+            margin: 0 auto;
+        }
+        
+        h1 {
+            text-align: center;
+            margin-bottom: 30px;
+            color: #88ccff;
+            text-shadow: 2px 2px 4px rgba(0, 0, 0, 0.5);
+        }
+        
+        .diagram-container {
+            background: #0f1419;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
+            overflow: auto;
+        }
+        
+        svg {
+            display: block;
+            margin: 0 auto;
+            background: #1a1f26;
+            border-radius: 5px;
+        }
+        
+        .node {
+            cursor: pointer;
+            transition: all 0.3s ease;
+        }
+        
+        .node:hover rect {
+            filter: brightness(1.2);
+        }
+        
+        .edge {
+            opacity: 1 !important;
+            pointer-events: all;
+        }
+        
+        .edge-path {
+            transition: all 0.3s ease;
+            opacity: 1 !important;
+            stroke: #aaddff !important;
+        }
+        
+        .edge:hover .edge-path {
+            stroke: #ffaa44;
+            stroke-width: 3;
+        }
+        
+        .edge:hover .edge-label {
+            fill: #ffaa44;
+            font-weight: bold;
+        }
+        
+        .info-panel {
+            background: #1a2332;
+            border-radius: 10px;
+            padding: 20px;
+            margin-top: 20px;
+            border: 1px solid #3a4a5a;
+        }
+        
+        .info-panel h2 {
+            color: #88ccff;
+            margin-bottom: 15px;
+            font-size: 1.2em;
+        }
+        
+        .info-panel ul {
+            list-style: none;
+            padding-left: 0;
+        }
+        
+        .info-panel li {
+            padding: 8px 0;
+            border-bottom: 1px solid #2a3a4a;
+            color: #aaddff;
+        }
+        
+        .info-panel li:last-child {
+            border-bottom: none;
+        }
+        
+        .legend {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-top: 20px;
+            flex-wrap: wrap;
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        
+        .legend-box {
+            width: 30px;
+            height: 20px;
+            border-radius: 3px;
+            border: 2px solid;
+        }
+        
+        .legend-statemachine {
+            background: #3a4a5a;
+            border-color: #5a7a9a;
+        }
+        
+        .legend-state {
+            background: #2a3a4a;
+            border-color: #4a6a8a;
+        }
+        
+        .legend-initial {
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: #88ff88;
+            border-color: #44aa44;
+        }
+        
+        @media (max-width: 768px) {
+            body {
+                padding: 10px;
+            }
+            
+            h1 {
+                font-size: 1.5em;
+            }
+            
+            .legend {
+                flex-direction: column;
+                align-items: flex-start;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🔄 Statechart Diagram</h1>
+        
+        <div class="diagram-container">
+            <svg width="1850.0" height="1270.0" viewBox="-942.0 -436.0 1850.0 1270.0">
+                <defs>
+                    <!-- Arrow marker for edges -->
+                    <marker id="arrowhead" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto" markerUnits="strokeWidth">
+                        <polygon points="0 0, 10 3, 0 6" fill="#aaddff"/>
+                    </marker>
+                    <!-- Arrow marker for initial state -->
+                    <marker id="arrowhead-initial" markerWidth="10" markerHeight="10" refX="9" refY="3" orient="auto">
+                        <polygon points="0 0, 10 3, 0 6" fill="#44aa44"/>
+                    </marker>
+                </defs>
+                
+                <!-- Nodes (drawn first) -->
+                
+        <g class="node node-process" id="node_4420639328" data-depth="0">
+            <rect x="-842.0" y="-336.0" width="1650.0" height="1094.0" 
+                  fill="#2a2a3a" stroke="#4a4a6a" stroke-width="2" rx="5"/>
+            <text x="-832.0" y="-316.0" fill="#ccccff" font-size="14" font-weight="bold">
+                Process2Pr
+            </text>
+            <line x1="-842.0" y1="-306.0" x2="808.0" y2="-306.0" 
+                  stroke="#4a4a6a" stroke-width="1"/>
+            
+        
+        <g class="node node-statemachine" id="node_4870910160" data-depth="1">
+            <rect x="-805.0" y="-250.0" width="1573.0" height="981.0" 
+                  fill="#3a4a5a" stroke="#5a7a9a" stroke-width="2" rx="5"/>
+            <text x="-795.0" y="-230.0" fill="#88ccff" font-size="14" font-weight="bold">
+                Statemachine2Sm
+            </text>
+            <line x1="-805.0" y1="-220.0" x2="768.0" y2="-220.0" 
+                  stroke="#5a7a9a" stroke-width="1"/>
+            
+        
+        <g class="node node-entry" id="node_4870912896" data-depth="2">
+            <rect x="-795.0" y="-180.0" width="274.0" height="72.0" 
+                  fill="#2a2a3a" stroke="#4a4a6a" stroke-width="2" rx="5"/>
+            <text x="-785.0" y="-160.0" fill="#ccccff" font-size="14" font-weight="bold">
+                Entry
+            </text>
+            <line x1="-795.0" y1="-150.0" x2="-521.0" y2="-150.0" 
+                  stroke="#4a4a6a" stroke-width="1"/>
+            
+        </g>
+
+        <g class="node node-exit" id="node_4870948464" data-depth="2">
+            <rect x="558.0" y="-180.0" width="193.0" height="108.0" 
+                  fill="#2a2a3a" stroke="#4a4a6a" stroke-width="2" rx="5"/>
+            <text x="568.0" y="-160.0" fill="#ccccff" font-size="14" font-weight="bold">
+                Exit
+            </text>
+            <line x1="558.0" y1="-150.0" x2="751.0" y2="-150.0" 
+                  stroke="#4a4a6a" stroke-width="1"/>
+            
+        </g>
+
+        <g class="node node-run" id="node_4870951264" data-depth="2">
+            <rect x="-795.0" y="536.0" width="532.0" height="178.0" 
+                  fill="#2a2a3a" stroke="#4a4a6a" stroke-width="2" rx="5"/>
+            <text x="-785.0" y="556.0" fill="#ccccff" font-size="14" font-weight="bold">
+                Run
+            </text>
+            <line x1="-795.0" y1="566.0" x2="-263.0" y2="566.0" 
+                  stroke="#4a4a6a" stroke-width="1"/>
+            
+        </g>
+
+        <g class="node node-state" id="node_4870954144" data-depth="2">
+            <rect x="-770.0" y="-82.0" width="712.0" height="536.0" 
+                  fill="#2a3a4a" stroke="#4a6a8a" stroke-width="2" rx="5"/>
+            <text x="-760.0" y="-62.0" fill="#aaddff" font-size="14" font-weight="bold">
+                State1St
+            </text>
+            <line x1="-770.0" y1="-52.0" x2="-58.0" y2="-52.0" 
+                  stroke="#4a6a8a" stroke-width="1"/>
+            
+            <circle cx="-78.0" cy="-67.0" r="10" fill="white" stroke="#888" stroke-width="2" style="opacity: 1;"/>
+            
+        
+        <g class="node node-state" id="node_4871010192" data-depth="3">
+            <rect x="-403.0" y="79.0" width="308.0" height="269.0" 
+                  fill="#2a3a4a" stroke="#4a6a8a" stroke-width="2" rx="5"/>
+            <text x="-393.0" y="99.0" fill="#aaddff" font-size="14" font-weight="bold">
+                State3St
+            </text>
+            <line x1="-403.0" y1="109.0" x2="-95.0" y2="109.0" 
+                  stroke="#4a6a8a" stroke-width="1"/>
+            
+            <circle cx="-115.0" cy="94.0" r="10" fill="white" stroke="#888" stroke-width="2" style="opacity: 1;"/>
+            
+        
+        <g class="node node-run" id="node_4871040304" data-depth="4">
+            <rect x="-393.0" y="171.0" width="254.0" height="160.0" 
+                  fill="#2a2a3a" stroke="#4a4a6a" stroke-width="2" rx="5"/>
+            <text x="-383.0" y="191.0" fill="#ccccff" font-size="14" font-weight="bold">
+                Run
+            </text>
+            <line x1="-393.0" y1="201.0" x2="-139.0" y2="201.0" 
+                  stroke="#4a4a6a" stroke-width="1"/>
+            
+        </g>
+</g>
+
+        <g class="node node-entry" id="node_4871012848" data-depth="3">
+            <rect x="-760.0" y="-12.0" width="242.0" height="65.0" 
+                  fill="#2a2a3a" stroke="#4a4a6a" stroke-width="2" rx="5"/>
+            <text x="-750.0" y="8.0" fill="#ccccff" font-size="14" font-weight="bold">
+                Entry
+            </text>
+            <line x1="-760.0" y1="18.0" x2="-518.0" y2="18.0" 
+                  stroke="#4a4a6a" stroke-width="1"/>
+            
+        </g>
+
+        <g class="node node-state" id="node_4871015584" data-depth="3">
+            <rect x="-745.0" y="174.0" width="200.0" height="105.0" 
+                  fill="#2a3a4a" stroke="#4a6a8a" stroke-width="2" rx="5"/>
+            <text x="-735.0" y="194.0" fill="#aaddff" font-size="14" font-weight="bold">
+                State4St
+            </text>
+            <line x1="-745.0" y1="204.0" x2="-545.0" y2="204.0" 
+                  stroke="#4a6a8a" stroke-width="1"/>
+            
+        </g>
+
+        <g class="node node-run" id="node_4871023776" data-depth="3">
+            <rect x="-760.0" y="330.0" width="312.0" height="107.0" 
+                  fill="#2a2a3a" stroke="#4a4a6a" stroke-width="2" rx="5"/>
+            <text x="-750.0" y="350.0" fill="#ccccff" font-size="14" font-weight="bold">
+                Run
+            </text>
+            <line x1="-760.0" y1="360.0" x2="-448.0" y2="360.0" 
+                  stroke="#4a4a6a" stroke-width="1"/>
+            
+        </g>
+
+        <g class="node node-exit" id="node_4871037424" data-depth="3">
+            <rect x="-318.0" y="-12.0" width="243.0" height="66.0" 
+                  fill="#2a2a3a" stroke="#4a4a6a" stroke-width="2" rx="5"/>
+            <text x="-308.0" y="8.0" fill="#ccccff" font-size="14" font-weight="bold">
+                Exit
+            </text>
+            <line x1="-318.0" y1="18.0" x2="-75.0" y2="18.0" 
+                  stroke="#4a4a6a" stroke-width="1"/>
+            
+        </g>
+</g>
+
+        <g class="node node-state" id="node_4870977280" data-depth="2">
+            <rect x="-21.0" y="108.0" width="749.0" height="596.0" 
+                  fill="#2a3a4a" stroke="#4a6a8a" stroke-width="2" rx="5"/>
+            <text x="-11.0" y="128.0" fill="#aaddff" font-size="14" font-weight="bold">
+                State2St
+            </text>
+            <line x1="-21.0" y1="138.0" x2="728.0" y2="138.0" 
+                  stroke="#4a6a8a" stroke-width="1"/>
+            
+        
+        <g class="node node-state" id="node_4871055536" data-depth="3">
+            <rect x="17.0" y="208.0" width="200.0" height="100.0" 
+                  fill="#2a3a4a" stroke="#4a6a8a" stroke-width="2" rx="5"/>
+            <text x="27.0" y="228.0" fill="#aaddff" font-size="14" font-weight="bold">
+                State5St
+            </text>
+            <line x1="17.0" y1="238.0" x2="217.0" y2="238.0" 
+                  stroke="#4a6a8a" stroke-width="1"/>
+            
+        </g>
+
+        <g class="node node-state" id="node_4871058192" data-depth="3">
+            <rect x="185.0" y="343.0" width="488.0" height="325.0" 
+                  fill="#2a3a4a" stroke="#4a6a8a" stroke-width="2" rx="5"/>
+            <text x="195.0" y="363.0" fill="#aaddff" font-size="14" font-weight="bold">
+                State6St
+            </text>
+            <line x1="185.0" y1="373.0" x2="673.0" y2="373.0" 
+                  stroke="#4a6a8a" stroke-width="1"/>
+            
+            <circle cx="653.0" cy="358.0" r="10" fill="white" stroke="#888" stroke-width="2" style="opacity: 1;"/>
+            
+        
+        <g class="node node-state" id="node_4871061360" data-depth="4">
+            <rect x="214.0" y="421.0" width="200.0" height="100.0" 
+                  fill="#2a3a4a" stroke="#4a6a8a" stroke-width="2" rx="5"/>
+            <text x="224.0" y="441.0" fill="#aaddff" font-size="14" font-weight="bold">
+                State7St
+            </text>
+            <line x1="214.0" y1="451.0" x2="414.0" y2="451.0" 
+                  stroke="#4a6a8a" stroke-width="1"/>
+            
+            <circle cx="394.0" cy="436.0" r="10" fill="white" stroke="#888" stroke-width="2" style="opacity: 1;"/>
+            
+        </g>
+
+        <g class="node node-state" id="node_4871068112" data-depth="4">
+            <rect x="440.0" y="524.0" width="200.0" height="100.0" 
+                  fill="#2a3a4a" stroke="#4a6a8a" stroke-width="2" rx="5"/>
+            <text x="450.0" y="544.0" fill="#aaddff" font-size="14" font-weight="bold">
+                State8St
+            </text>
+            <line x1="440.0" y1="554.0" x2="640.0" y2="554.0" 
+                  stroke="#4a6a8a" stroke-width="1"/>
+            
+        </g>
+</g>
+
+        <g class="node node-exit" id="node_4871081120" data-depth="3">
+            <rect x="514.0" y="178.0" width="197.0" height="90.0" 
+                  fill="#2a2a3a" stroke="#4a4a6a" stroke-width="2" rx="5"/>
+            <text x="524.0" y="198.0" fill="#ccccff" font-size="14" font-weight="bold">
+                Exit
+            </text>
+            <line x1="514.0" y1="208.0" x2="711.0" y2="208.0" 
+                  stroke="#4a4a6a" stroke-width="1"/>
+            
+        </g>
+</g>
+</g>
+</g>
+
+                
+                <!-- Edges (drawn last so they appear on top) -->
+                
+        <g class="edge" id="edge_4870954144_4870977280" style="pointer-events: all;">
+            <path d="M -54.5,23.958294105480235 L 194.5911696510509,23.958294105480235 L 194.5911696510509,104.5" class="edge-path" fill="none" stroke="#aaddff" stroke-width="2" marker-end="url(#arrowhead)" style="opacity: 1;"/>
+            <text class="edge-label" x="70.04558482552545" y="13.958294105480235" text-anchor="middle" fill="#ddd" font-size="12" style="pointer-events: none;">
+                EV_1
+            </text>
+        </g>
+        
+        <g class="edge" id="edge_4870977280_4870954144" style="pointer-events: all;">
+            <path d="M -24.5,490.17324876650355 L -498.893575732509,490.17324876650355 L -498.893575732509,457.5" class="edge-path" fill="none" stroke="#aaddff" stroke-width="2" marker-end="url(#arrowhead)" style="opacity: 1;"/>
+            <text class="edge-label" x="-261.6967878662545" y="480.17324876650355" text-anchor="middle" fill="#ddd" font-size="12" style="pointer-events: none;">
+                EV_2
+            </text>
+        </g>
+        
+        <g class="edge" id="edge_4871010192_4871015584" style="pointer-events: all;">
+            <path d="M -406.5,241.5910785773924 L -463.6991527037328,241.5910785773924 L -463.6991527037328,239.94268906814028 L -541.5,239.94268906814028" class="edge-path" fill="none" stroke="#aaddff" stroke-width="2" marker-end="url(#arrowhead)" style="opacity: 1;"/>
+            <text class="edge-label" x="-502.5995763518664" y="229.94268906814028" text-anchor="middle" fill="#ddd" font-size="12" style="pointer-events: none;">
+                EV_3
+            </text>
+        </g>
+        
+        <g class="edge" id="edge_4871015584_4871010192" style="pointer-events: all;">
+            <path d="M -684.4016864518561,170.5 L -684.4016864518561,170.5 L -684.4016864518561,130.68966820346157 L -406.5,130.68966820346157" class="edge-path" fill="none" stroke="#aaddff" stroke-width="2" marker-end="url(#arrowhead)" style="opacity: 1;"/>
+            <text class="edge-label" x="-545.4508432259281" y="120.68966820346157" text-anchor="middle" fill="#ddd" font-size="12" style="pointer-events: none;">
+                EV_3
+            </text>
+        </g>
+        
+        <g class="edge" id="edge_4871055536_4871058192" style="pointer-events: all;">
+            <path d="M 220.5,238.70703125 L 360.6637674369399,238.70703125 L 360.6637674369399,339.5" class="edge-path" fill="none" stroke="#aaddff" stroke-width="2" marker-end="url(#arrowhead)" style="opacity: 1;"/>
+            <text class="edge-label" x="290.58188371846995" y="228.70703125" text-anchor="middle" fill="#ddd" font-size="12" style="pointer-events: none;">
+                EV_5
+            </text>
+        </g>
+        
+        <g class="edge" id="edge_4871061360_4871068112" style="pointer-events: all;">
+            <path d="M 417.5,461.6700000000001 L 551.8795504667532,461.6700000000001 L 551.8795504667532,520.5" class="edge-path" fill="none" stroke="#aaddff" stroke-width="2" marker-end="url(#arrowhead)" style="opacity: 1;"/>
+            <text class="edge-label" x="484.6897752333766" y="451.6700000000001" text-anchor="middle" fill="#ddd" font-size="12" style="pointer-events: none;">
+                EV_6
+            </text>
+        </g>
+        
+        <g class="edge" id="edge_4871068112_4871061360" style="pointer-events: all;">
+            <path d="M 436.5,580.0803718199608 L 305.63888310064596,580.0803718199608 L 305.63888310064596,524.5" class="edge-path" fill="none" stroke="#aaddff" stroke-width="2" marker-end="url(#arrowhead)" style="opacity: 1;"/>
+            <text class="edge-label" x="371.06944155032295" y="570.0803718199608" text-anchor="middle" fill="#ddd" font-size="12" style="pointer-events: none;">
+                EV_7
+            </text>
+        </g>
+        
+        <g class="edge" id="edge_4871058192_4871055536" style="pointer-events: all;">
+            <path d="M 181.5,531.9054495714907 L 109.52891119354135,531.9054495714907 L 109.52891119354135,311.5" class="edge-path" fill="none" stroke="#aaddff" stroke-width="2" marker-end="url(#arrowhead)" style="opacity: 1;"/>
+            <text class="edge-label" x="124.52891119354135" y="421.7027247857454" text-anchor="start" fill="#ddd" font-size="12" style="pointer-events: none;">
+                EV_8
+            </text>
+        </g>
+        
+            </svg>
+        </div>
+        
+        <div class="legend">
+            <div class="legend-item">
+                <div class="legend-box legend-statemachine"></div>
+                <span>State Machine</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box legend-state"></div>
+                <span>State</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-box legend-initial"></div>
+                <span>Initial State</span>
+            </div>
+        </div>
+        
+        <div class="info-panel">
+            <h2>📊 Diagram Statistics</h2>
+            <ul>
+                <li><strong>Total Nodes:</strong> 18</li>
+                <li><strong>Total Transitions:</strong> 8</li>
+                <li><strong>State Machines:</strong> 1</li>
+                <li><strong>States:</strong> 8</li>
+                <li><strong>Container States:</strong> 6</li>
+                <li><strong>Initial States:</strong> 4</li>
+            </ul>
+        </div>
+    </div>
+    
+    <script>
+        // Add interactivity
+        document.querySelectorAll('.node').forEach(node => {
+            node.addEventListener('click', function() {
+                const nodeId = this.id;
+                console.log('Clicked node:', nodeId);
+                
+                // Highlight the node
+                this.style.opacity = this.style.opacity === '0.7' ? '1' : '0.7';
+            });
+        });
+        
+        // Add hover effects for edges
+        document.querySelectorAll('.edge').forEach(edge => {
+            edge.addEventListener('mouseenter', function() {
+                this.style.opacity = '1';
+            });
+            
+            edge.addEventListener('mouseleave', function() {
+                this.style.opacity = '0.8';
+            });
+        });
+    </script>
+</body>
+</html>

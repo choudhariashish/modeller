@@ -104,11 +104,34 @@ class StatechartGenerator:
         start_node_x, start_node_y = self.calculate_absolute_position(start_node)
         end_node_x, end_node_y = self.calculate_absolute_position(end_node)
         
+        # Get visual heights for container nodes (accounting for 30px title bar offset)
+        start_node_height = start_node['rect']['height']
+        if start_node.get('is_container', False):
+            start_node_height += 30
+        
+        end_node_height = end_node['rect']['height']
+        if end_node.get('is_container', False):
+            end_node_height += 30
+        
         # Add offsets from edge data to get actual connection points
         start_x = start_node_x + edge['start_offset']['x']
         start_y = start_node_y + edge['start_offset']['y']
         end_x = end_node_x + edge['end_offset']['x']
         end_y = end_node_y + edge['end_offset']['y']
+        
+        # Adjust Y coordinates if connecting to bottom of container nodes
+        # Check if connection is near the bottom (within 10px of stored height)
+        if start_node.get('is_container', False):
+            stored_height = start_node['rect']['height']
+            if abs(edge['start_offset']['y'] - stored_height) < 10:
+                # Connection is at bottom, adjust by 30px
+                start_y += 30
+        
+        if end_node.get('is_container', False):
+            stored_height = end_node['rect']['height']
+            if abs(edge['end_offset']['y'] - stored_height) < 10:
+                # Connection is at bottom, adjust by 30px
+                end_y += 30
         
         # Get waypoint ratio (controls position of vertical segment)
         waypoint_ratio = edge.get('waypoint_ratio', 0.5)
@@ -120,7 +143,7 @@ class StatechartGenerator:
         # Determine which side of the end node the connection point is on
         # This helps us ensure the arrow points perpendicular to the border
         end_node_center_x = end_node_x + end_node['rect']['width'] / 2
-        end_node_center_y = end_node_y + end_node['rect']['height'] / 2
+        end_node_center_y = end_node_y + end_node_height / 2
         
         # Calculate relative position of connection point to node center
         rel_x = end_x - end_node_center_x
@@ -128,9 +151,9 @@ class StatechartGenerator:
         
         # Determine which side: compare absolute distances
         end_node_width = end_node['rect']['width']
-        end_node_height = end_node['rect']['height']
+        stored_end_node_height = end_node['rect']['height']
         
-        # Normalize to determine which edge we're closest to
+        # Normalize to determine which edge we're closest to (use visual height for calculation)
         norm_x = abs(rel_x) / (end_node_width / 2) if end_node_width > 0 else 0
         norm_y = abs(rel_y) / (end_node_height / 2) if end_node_height > 0 else 0
         
@@ -212,6 +235,13 @@ class StatechartGenerator:
         is_container = node.get('is_container', False)
         is_initial = node.get('is_initial', False)
         
+        # For container nodes, add extra height to account for the 30px title bar offset
+        # that children will have when positioned inside
+        visual_height = height
+        if is_container:
+            # Add 30px to the visual height so the bottom boundary accounts for title bar offset
+            visual_height = height + 30
+        
         # Determine node color based on type
         if node_type == 'StateMachine':
             fill_color = '#3a4a5a'
@@ -239,7 +269,7 @@ class StatechartGenerator:
         
         svg = f'''
         <g class="node node-{node_type.lower()}" id="node_{node_id}" data-depth="{depth}">
-            <rect x="{pos_x}" y="{pos_y}" width="{width}" height="{height}" 
+            <rect x="{pos_x}" y="{pos_y}" width="{width}" height="{visual_height}" 
                   fill="{fill_color}" stroke="{stroke_color}" stroke-width="2" rx="5"/>
             <text x="{pos_x + 10}" y="{pos_y + 20}" fill="{title_color}" font-size="14" font-weight="bold">
                 {title}
@@ -274,7 +304,9 @@ class StatechartGenerator:
             min_x = min(min_x, abs_x)
             min_y = min(min_y, abs_y)
             max_x = max(max_x, abs_x + node['rect']['width'])
-            max_y = max(max_y, abs_y + node['rect']['height'])
+            # Add extra padding at bottom for child nodes to ensure they're visible within parent
+            bottom_padding = 20 if node.get('parent_id') is not None else 0
+            max_y = max(max_y, abs_y + node['rect']['height'] + bottom_padding)
         
         # Add padding
         padding = 100
