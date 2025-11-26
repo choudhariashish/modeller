@@ -2200,26 +2200,56 @@ class NodeEditorWindow(QMainWindow):
         if not isinstance(edge, Edge):
             return
         
-        source_node = edge._start_node
-        target_node = edge._end_node
+        # Get the title of the clicked edge
+        edge_title = edge.title_item.toPlainText() if hasattr(edge, 'title_item') else ""
         
-        if not source_node or not target_node:
-            self.statusBar().showMessage("Invalid transition", 2000)
-            return
+        # Find all edges with the same title
+        edges_to_trigger = []
+        edges_list = self.scene.edges if hasattr(self.scene, 'edges') else self.edges
         
-        # Check if target is a State or StateMachine
-        if target_node.node_type not in ["State", "StateMachine"]:
-            self.statusBar().showMessage("Target is not a state", 2000)
-            return
+        for e in edges_list:
+            if isinstance(e, Edge) and hasattr(e, 'title_item'):
+                e_title = e.title_item.toPlainText()
+                if e_title and e_title == edge_title:
+                    edges_to_trigger.append(e)
         
-        # Validate that the transition is valid from current state
-        if not self.is_transition_valid(source_node):
-            edge_title = edge.title_item.toPlainText() if hasattr(edge, 'title_item') else "this edge"
-            self.statusBar().showMessage(f"Cannot trigger {edge_title} - not in source state", 2000)
-            return
+        # If no title, just trigger the clicked edge
+        if not edge_title:
+            edges_to_trigger = [edge]
         
-        # Transition is valid, execute it
-        self.transition_to_state(target_node)
+        # First pass: Validate all edges and collect valid transitions
+        # This ensures we evaluate all transitions based on the CURRENT state,
+        # not after other transitions have executed
+        valid_transitions = []
+        
+        for e in edges_to_trigger:
+            source_node = e._start_node
+            target_node = e._end_node
+            
+            if not source_node or not target_node:
+                continue
+            
+            # Check if target is a State or StateMachine
+            if target_node.node_type not in ["State", "StateMachine"]:
+                continue
+            
+            # Validate that the transition is valid from current state
+            if self.is_transition_valid(source_node):
+                valid_transitions.append((target_node, source_node))
+        
+        # Second pass: Execute all valid transitions
+        triggered_count = len(valid_transitions)
+        for target_node, source_node in valid_transitions:
+            self.transition_to_state(target_node)
+        
+        # Update status message
+        if triggered_count == 0:
+            if edge_title:
+                self.statusBar().showMessage(f"Cannot trigger '{edge_title}' - not in any source state", 2000)
+            else:
+                self.statusBar().showMessage("Cannot trigger transition - not in source state", 2000)
+        elif triggered_count > 1:
+            self.statusBar().showMessage(f"Triggered {triggered_count} transitions with title '{edge_title}'", 2000)
     
     def is_transition_valid(self, source_node):
         """Check if a transition from source_node is valid given current state"""
