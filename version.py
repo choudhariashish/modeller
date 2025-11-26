@@ -2,11 +2,31 @@
 Version information for the Hierarchical State Machine Modeller
 """
 
-__version__ = "1.0.0"
-__version_info__ = (1, 0, 0)
+__version__ = "1.1.0"
+__version_info__ = (1, 1, 0)
 
 # Version history
 VERSION_HISTORY = """
+Version 1.1.0 (2025-11-26)
+==========================
+Added Run node type and enhanced Entry/Exit nodes with editable text boxes.
+
+New Features:
+- Run node type for execution logic inside StateMachine and State nodes
+- Editable text boxes inside Entry, Exit, and Run nodes
+- Auto-positioning: Entry (top-left), Exit (top-right), Run (bottom-left)
+- Text box dynamically resizes with node borders
+- Right-click "Add Run Node" context menu option
+- Run nodes cannot be moved or reparented (locked to bottom-left)
+
+Bug Fixes:
+- Fixed node size restoration for Entry/Exit/Run nodes after file load
+- Text box now properly resizes during manual node resize
+
+Documentation:
+- Added state machine example image to README
+- Improved node hierarchy documentation
+
 Version 1.0.0 (2025-11-21)
 ==========================
 Initial release with complete hierarchical state machine modeling and simulation capabilities.

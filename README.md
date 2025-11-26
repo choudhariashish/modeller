@@ -1,10 +1,23 @@
 # The Modeller - Hierarchical State Machine Editor
 
-**Version 1.0.0**
+**Version 1.1.0**
 
 AI powered software modeling tool with hierarchical state machine simulation and code generation capabilities.
 
-A PyQt5-based state machine editor with orthogonal edge routing, interactive manipulation, and complete simulation mode.
+## Example
+
+Here's an example showing the hierarchical structure with Process → StateMachine → State → Entry/Exit/Run nodes:
+
+![State Machine Example](docs/state-machine.png)
+
+The example demonstrates:
+- **Process nodes** (blue) containing StateMachines
+- **StateMachine nodes** (light purple) containing States
+- **State nodes** (dark purple) with hierarchical nesting
+- **Entry nodes** (purple, top-left) marking state entry points
+- **Exit nodes** (purple, top-right) marking state exit points
+- **Run nodes** (purple, bottom-left) for execution logic
+- **Transitions** (edges) connecting states with event labels
 
 ## Features
 
@@ -56,7 +69,7 @@ A PyQt5-based state machine editor with orthogonal edge routing, interactive man
 - Undo stack size: 50 actions
 - Redo stack automatically managed
 
-### Simulator Mode (NEW in v1.0.0)
+### Simulator Mode
 - **Toggle Simulator ON/OFF** via toolbar button
 - **Hierarchical state machine execution**:
   - Automatic initial state detection and entry
@@ -171,6 +184,15 @@ python3 modeller.py
   - All editing is disabled
 
 ## Version History
+
+### Version 1.1.0 (2025-11-26)
+- Added Run node type for execution logic inside StateMachine and State nodes
+- Entry, Exit, and Run nodes with editable text boxes
+- Auto-positioning: Entry (top-left), Exit (top-right), Run (bottom-left)
+- Text box resizing with node borders
+- Fixed node size restoration after file load
+- Added state machine example image to README
+- Improved node hierarchy documentation
 
 ### Version 1.0.0 (2025-11-21)
 - Initial release with complete hierarchical state machine modeling

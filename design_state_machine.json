@@ -1,0 +1,462 @@
+{
+  "product": "modeller",
+  "version": "v1.1.0",
+  "nodes": [
+    {
+      "title": "Process2Pr",
+      "pos": {
+        "x": -842.0,
+        "y": -336.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 1650.0,
+        "height": 1064.0
+      },
+      "node_type": "Process",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": null,
+      "id": 4420639328,
+      "user_text": ""
+    },
+    {
+      "title": "Statemachine2Sm",
+      "pos": {
+        "x": 37.0,
+        "y": 56.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 1573.0,
+        "height": 951.0
+      },
+      "node_type": "StateMachine",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": 4420639328,
+      "id": 4870910160,
+      "user_text": ""
+    },
+    {
+      "title": "Entry",
+      "pos": {
+        "x": 10.0,
+        "y": 40.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 274.0,
+        "height": 72.0
+      },
+      "node_type": "Entry",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4870910160,
+      "id": 4870912896,
+      "user_text": "This will execute once when the statemachine starts"
+    },
+    {
+      "title": "Exit",
+      "pos": {
+        "x": 1363.0,
+        "y": 40.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 193.0,
+        "height": 108.0
+      },
+      "node_type": "Exit",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4870910160,
+      "id": 4870948464,
+      "user_text": "This will execute once the statemachine exits. This can be used to perform clean shutdown/exit of the process."
+    },
+    {
+      "title": "Run",
+      "pos": {
+        "x": 10.0,
+        "y": 756.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 532.0,
+        "height": 178.0
+      },
+      "node_type": "Run",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4870910160,
+      "id": 4870951264,
+      "user_text": "What are we continuously looking at while we are in this state ?\n\nAdd those details here\n\nIf we want to trigger any event if something happens while we are in this state, then add it here\n\nFor example,\n\nIf (getSensorAvgValue(x) > 1.2) => scheduleEv(EV_2)\n\n"
+    },
+    {
+      "title": "State1St",
+      "pos": {
+        "x": 35.0,
+        "y": 138.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 712.0,
+        "height": 506.0
+      },
+      "node_type": "State",
+      "is_container": true,
+      "is_initial": true,
+      "parent_id": 4870910160,
+      "id": 4870954144,
+      "user_text": ""
+    },
+    {
+      "title": "State3St",
+      "pos": {
+        "x": 367.0,
+        "y": 131.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 308.0,
+        "height": 239.0
+      },
+      "node_type": "State",
+      "is_container": true,
+      "is_initial": true,
+      "parent_id": 4870954144,
+      "id": 4871010192,
+      "user_text": ""
+    },
+    {
+      "title": "Run",
+      "pos": {
+        "x": 10.0,
+        "y": 62.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 254.0,
+        "height": 160.0
+      },
+      "node_type": "Run",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4871010192,
+      "id": 4871040304,
+      "user_text": "The run function of State3St shall always be called as long as we are in State3St.\n\nAlso, the run function of all parent node will be called after this. It should be a recursive inside-out call till the process's statemachine."
+    },
+    {
+      "title": "Entry",
+      "pos": {
+        "x": 10.0,
+        "y": 40.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 242.0,
+        "height": 65.0
+      },
+      "node_type": "Entry",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4870954144,
+      "id": 4871012848,
+      "user_text": "This executes once this state is entered"
+    },
+    {
+      "title": "State4St",
+      "pos": {
+        "x": 25.0,
+        "y": 226.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 105.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4870954144,
+      "id": 4871015584,
+      "user_text": ""
+    },
+    {
+      "title": "Run",
+      "pos": {
+        "x": 10.0,
+        "y": 382.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 312.0,
+        "height": 107.0
+      },
+      "node_type": "Run",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4870954144,
+      "id": 4871023776,
+      "user_text": "The run funtion of this state State1St:run() will always be periodically called, as long as we are in this state.\n\nIf something happens while we are in State1St\n=> triggerEvent(EV_1)"
+    },
+    {
+      "title": "Exit",
+      "pos": {
+        "x": 452.0,
+        "y": 40.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 243.0,
+        "height": 66.0
+      },
+      "node_type": "Exit",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4870954144,
+      "id": 4871037424,
+      "user_text": "This executes once when this state exits"
+    },
+    {
+      "title": "State2St",
+      "pos": {
+        "x": 784.0,
+        "y": 328.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 749.0,
+        "height": 566.0
+      },
+      "node_type": "State",
+      "is_container": true,
+      "is_initial": false,
+      "parent_id": 4870910160,
+      "id": 4870977280,
+      "user_text": ""
+    },
+    {
+      "title": "State5St",
+      "pos": {
+        "x": 38.0,
+        "y": 70.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4870977280,
+      "id": 4871055536,
+      "user_text": ""
+    },
+    {
+      "title": "State6St",
+      "pos": {
+        "x": 206.0,
+        "y": 205.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 488.0,
+        "height": 295.0
+      },
+      "node_type": "State",
+      "is_container": true,
+      "is_initial": true,
+      "parent_id": 4870977280,
+      "id": 4871058192,
+      "user_text": ""
+    },
+    {
+      "title": "State7St",
+      "pos": {
+        "x": 29.0,
+        "y": 48.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": true,
+      "parent_id": 4871058192,
+      "id": 4871061360,
+      "user_text": ""
+    },
+    {
+      "title": "State8St",
+      "pos": {
+        "x": 255.0,
+        "y": 151.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 200.0,
+        "height": 100.0
+      },
+      "node_type": "State",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4871058192,
+      "id": 4871068112,
+      "user_text": ""
+    },
+    {
+      "title": "Exit",
+      "pos": {
+        "x": 535.0,
+        "y": 40.0
+      },
+      "rect": {
+        "x": 0.0,
+        "y": 0.0,
+        "width": 197.0,
+        "height": 90.0
+      },
+      "node_type": "Exit",
+      "is_container": false,
+      "is_initial": false,
+      "parent_id": 4870977280,
+      "id": 4871081120,
+      "user_text": "What do we want to do when State2St exit?"
+    }
+  ],
+  "edges": [
+    {
+      "start_node_id": 4870954144,
+      "end_node_id": 4870977280,
+      "title": "EV_1",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 715.5,
+        "y": 105.95829410548023
+      },
+      "end_offset": {
+        "x": 215.5911696510509,
+        "y": -3.5
+      }
+    },
+    {
+      "start_node_id": 4870977280,
+      "end_node_id": 4870954144,
+      "title": "EV_2",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": -3.5,
+        "y": 382.17324876650355
+      },
+      "end_offset": {
+        "x": 271.106424267491,
+        "y": 509.5
+      }
+    },
+    {
+      "start_node_id": 4871010192,
+      "end_node_id": 4871015584,
+      "title": "EV_3",
+      "waypoint_ratio": 0.42369742743505784,
+      "start_offset": {
+        "x": -3.5,
+        "y": 162.5910785773924
+      },
+      "end_offset": {
+        "x": 203.5,
+        "y": 65.94268906814028
+      }
+    },
+    {
+      "start_node_id": 4871015584,
+      "end_node_id": 4871010192,
+      "title": "EV_3",
+      "waypoint_ratio": 0.0,
+      "start_offset": {
+        "x": 60.59831354814389,
+        "y": -3.5
+      },
+      "end_offset": {
+        "x": -3.5,
+        "y": 51.689668203461565
+      }
+    },
+    {
+      "start_node_id": 4871055536,
+      "end_node_id": 4871058192,
+      "title": "EV_5",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 203.5,
+        "y": 30.70703125
+      },
+      "end_offset": {
+        "x": 175.6637674369399,
+        "y": -3.5
+      }
+    },
+    {
+      "start_node_id": 4871061360,
+      "end_node_id": 4871068112,
+      "title": "EV_6",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": 203.5,
+        "y": 40.67000000000007
+      },
+      "end_offset": {
+        "x": 111.87955046675324,
+        "y": -3.5
+      }
+    },
+    {
+      "start_node_id": 4871068112,
+      "end_node_id": 4871061360,
+      "title": "EV_7",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": -3.5,
+        "y": 56.08037181996076
+      },
+      "end_offset": {
+        "x": 91.63888310064596,
+        "y": 103.5
+      }
+    },
+    {
+      "start_node_id": 4871058192,
+      "end_node_id": 4871055536,
+      "title": "EV_8",
+      "waypoint_ratio": 1.0,
+      "start_offset": {
+        "x": -3.5,
+        "y": 188.90544957149075
+      },
+      "end_offset": {
+        "x": 92.52891119354135,
+        "y": 103.5
+      }
+    }
+  ]
+}

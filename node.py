@@ -646,6 +646,11 @@ class Node(QGraphicsItem):
             self.width = 100
             self.height = 60
             self.update_size()
+            # Ensure rect is set before creating text box
+            self.rect = QRectF(0, 0, self.width, self.height)
+            # Add editable text box
+            self._create_text_box()
+            self._update_text_box_size()
         elif node_type == "Exit":
             # Red title background for Exit
             self.title_color = QColor(COLOR_EXIT)
@@ -658,6 +663,11 @@ class Node(QGraphicsItem):
             self.width = 100
             self.height = 60
             self.update_size()
+            # Ensure rect is set before creating text box
+            self.rect = QRectF(0, 0, self.width, self.height)
+            # Add editable text box
+            self._create_text_box()
+            self._update_text_box_size()
         elif node_type == "Run":
             # Purple title background for Run
             self.title_color = QColor(COLOR_RUN)
@@ -670,6 +680,11 @@ class Node(QGraphicsItem):
             self.width = 100
             self.height = 60
             self.update_size()
+            # Ensure rect is set before creating text box
+            self.rect = QRectF(0, 0, self.width, self.height)
+            # Add editable text box
+            self._create_text_box()
+            self._update_text_box_size()
             # Position at bottom-left of parent if parent exists
             if self.parent_node:
                 self.position_at_bottom_left()
@@ -707,6 +722,50 @@ class Node(QGraphicsItem):
         
         # Set position in parent's local coordinates
         self.setPos(x, y)
+    
+    def _create_text_box(self):
+        """Create an editable text box for Entry, Exit, and Run nodes"""
+        # Check if text box already exists
+        if hasattr(self, 'text_box') and self.text_box is not None:
+            return
+        
+        # Create editable text item
+        self.text_box = QGraphicsTextItem("", self)
+        self.text_box.setDefaultTextColor(QColor("#ecf0f1"))  # Light text color
+        self.text_box.setTextInteractionFlags(Qt.TextEditorInteraction)  # Make it editable
+        
+        # Set font to be 2 points smaller than title font
+        title_font = self.title_item.font()
+        title_font_size = title_font.pointSize()
+        
+        font = self.text_box.font()
+        font.setPointSize(title_font_size - 2)
+        self.text_box.setFont(font)
+        
+        # Position at top-left corner (inside border)
+        x_pos = self.border_width
+        y_pos = self.title_height
+        self.text_box.setPos(x_pos, y_pos)
+        
+        # Set text width to match node width (minus borders and 10px margin from right)
+        text_width = self.rect.width() - (2 * self.border_width) - 10
+        self.text_box.setTextWidth(text_width)
+        
+        # Store initial text value
+        if not hasattr(self, 'user_text'):
+            self.user_text = ""
+    
+    def _update_text_box_size(self):
+        """Update text box size to match node dimensions"""
+        if hasattr(self, 'text_box') and self.text_box:
+            # Position text box right after the left border, below the title
+            x_pos = self.border_width
+            y_pos = self.title_height
+            self.text_box.setPos(x_pos, y_pos)
+            
+            # Calculate text width: total width minus left and right borders and 10px margin from right
+            text_width = self.rect.width() - (2 * self.border_width) - 10
+            self.text_box.setTextWidth(text_width)
     
     def setup_container(self):
         """Set up this node as a container for child nodes"""
@@ -900,6 +959,10 @@ class Node(QGraphicsItem):
         # Update the node if size changed
         if old_width != self.width or old_height != self.height:
             self.update()
+            
+            # Update text box size for Entry, Exit, and Run nodes
+            if self.node_type in ["Entry", "Exit", "Run"]:
+                self._update_text_box_size()
             
             # Update smiley face position if in simulator mode
             if hasattr(self, '_simulator_smiley'):
@@ -1177,6 +1240,10 @@ class Node(QGraphicsItem):
             # Update inner rect and reposition Entry/Exit children if this is a State
             if self.is_container:
                 self.update_inner_rect()
+            
+            # Update text box size for Entry, Exit, and Run nodes during resize
+            if self.node_type in ["Entry", "Exit", "Run"]:
+                self._update_text_box_size()
             
             self.update()
             
@@ -3397,7 +3464,8 @@ class NodeEditorWindow(QMainWindow):
                     'is_container': node.is_container,
                     'is_initial': getattr(node, 'is_initial', False),
                     'parent_id': id(node.parent_node) if hasattr(node, 'parent_node') and node.parent_node else None,
-                    'id': id(node)  # Use object id as unique identifier
+                    'id': id(node),  # Use object id as unique identifier
+                    'user_text': getattr(node, 'text_box', None).toPlainText() if hasattr(node, 'text_box') and node.text_box else ""
                 }
                 nodes_data.append(node_data)
             
@@ -3438,7 +3506,7 @@ class NodeEditorWindow(QMainWindow):
             # Create the design data structure with metadata
             design_data = {
                 'product': 'modeller',
-                'version': 'v1.0.0',
+                'version': 'v1.1.0',
                 'nodes': nodes_data,
                 'edges': edges_data
             }
@@ -3519,6 +3587,25 @@ class NodeEditorWindow(QMainWindow):
                 if node_data.get('node_type'):
                     node.set_node_type(node_data['node_type'])
                 
+                # Restore rect dimensions after set_node_type (which may have reset them for Entry/Exit/Run)
+                node.rect = QRectF(
+                    rect_data['x'],
+                    rect_data['y'],
+                    rect_data['width'],
+                    rect_data['height']
+                )
+                node.width = rect_data['width']
+                node.height = rect_data['height']
+                
+                # Update text box size for Entry, Exit, and Run nodes after restoring dimensions
+                if node_data.get('node_type') in ["Entry", "Exit", "Run"]:
+                    if hasattr(node, '_update_text_box_size'):
+                        node._update_text_box_size()
+                
+                # Update resize handle position after restoring final rect
+                if hasattr(node, 'update_handles'):
+                    node.update_handles()
+                
                 # Restore the original title from JSON (after set_node_type which may overwrite it)
                 node.title = node_data['title']
                 node.title_item.setPlainText(node_data['title'])
@@ -3532,6 +3619,11 @@ class NodeEditorWindow(QMainWindow):
                 # Update inner rect for containers
                 if node_data.get('is_container') and hasattr(node, 'update_inner_rect'):
                     node.update_inner_rect()
+                
+                # Restore user text for Entry, Exit, and Run nodes
+                if hasattr(node, 'text_box') and node.text_box:
+                    user_text = node_data.get('user_text', '')
+                    node.text_box.setPlainText(user_text)
                 
                 # Map old ID to new node
                 id_to_node[node_data['id']] = node
