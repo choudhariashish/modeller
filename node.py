@@ -3370,8 +3370,10 @@ class NodeEditorWindow(QMainWindow):
                     }
                     edges_data.append(edge_data)
             
-            # Create the design data structure
+            # Create the design data structure with metadata
             design_data = {
+                'product': 'modeller',
+                'version': 'v1.0.0',
                 'nodes': nodes_data,
                 'edges': edges_data
             }
