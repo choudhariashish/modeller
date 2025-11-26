@@ -119,7 +119,7 @@ A PyQt5-based state machine editor with orthogonal edge routing, interactive man
 
 Run the application:
 ```bash
-python main.py
+python3 modeller.py
 ```
 
 ### Controls
